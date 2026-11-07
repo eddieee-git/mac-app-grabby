@@ -4,7 +4,7 @@ import AppKit
 final class LibraryWindowController: NSWindowController, NSWindowDelegate {
     private let store = CaptureStore.shared
     private let canvas = AnnotationCanvas(image: LibraryWindowController.blank, pixelScale: 1)
-    private let emptyLabel = NSTextField(labelWithString: "아직 캡처가 없어요.\n⌘⇧1로 화면을 캡처해 보세요.")
+    private let emptyLabel = NSTextField(labelWithString: "아직 캡처가 없어요.\n메뉴바의 영역 캡처나 단축키로 화면을 캡처해 보세요.")
     private let tabStrip = NSStackView()
     private let tabScroll = NSScrollView()
     private let pinButton = NSButton()

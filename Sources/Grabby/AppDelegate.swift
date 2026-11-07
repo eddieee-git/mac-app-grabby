@@ -1,14 +1,17 @@
 import AppKit
 import Carbon
-import ServiceManagement
+import Combine
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var hotKeys: [HotKey] = []
+    private var hotKeyItems: [HotKeyAction: NSMenuItem] = [:]
+    private var hotKeySubscription: AnyCancellable?
     private var session: CaptureSession?
     private var library: LibraryWindowController?
-    private var loginItem: NSMenuItem!
+    private let settingsWindow = SettingsWindowController()
+    private let settings = AppSettings.shared
     /// 캡처를 시작하기 전에 앞에 있던 앱. 캡처가 끝나면 돌려줘서 바로 ⌘V로 붙여 넣을 수 있게 한다.
     private var previousApp: NSRunningApplication?
 
@@ -18,31 +21,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMainMenu()
         buildStatusItem()
-        registerHotKeys()
+        // 설정에서 단축키를 바꾸면 바로 다시 등록한다. 입력받는 동안에는 잠시 풀어 둔다.
+        hotKeySubscription = settings.$hotKeys.combineLatest(settings.$isRecordingHotKey).sink { [weak self] combos, isRecording in
+            self?.registerHotKeys(isRecording ? [:] : combos)
+            self?.updateHotKeyItems(combos)
+        }
         _ = CaptureStore.shared
     }
 
-    /// 다른 앱(예: Shottr)이 같은 조합을 먼저 차지하면 등록이 실패한다. 그때는 알려 준다.
-    private func registerHotKeys() {
-        let commandShift = cmdKey | shiftKey
-        var failed: [String] = []
-        let capture = HotKey(id: 1, keyCode: kVK_ANSI_1, modifiers: commandShift) { [weak self] in
-            MainActor.assumeIsolated { self?.captureArea() }
+    private func registerHotKeys(_ combos: [String: KeyCombo]) {
+        hotKeys = []
+        var failed: Set<HotKeyAction> = []
+        for (index, action) in HotKeyAction.allCases.enumerated() {
+            guard let combo = combos[action.rawValue] else { continue }
+            let hotKey = HotKey(id: UInt32(index + 1), combo: combo) { [weak self] in
+                MainActor.assumeIsolated { self?.perform(action) }
+            }
+            if let hotKey { hotKeys.append(hotKey) } else { failed.insert(action) }
         }
-        if capture == nil { failed.append("⌘⇧1 (영역 캡처)") }
-        let repeatLast = HotKey(id: 2, keyCode: kVK_ANSI_2, modifiers: commandShift) { [weak self] in
-            MainActor.assumeIsolated { self?.repeatLastArea() }
-        }
-        if repeatLast == nil { failed.append("⌘⇧2 (마지막 영역 다시 캡처)") }
-        hotKeys = [capture, repeatLast].compactMap { $0 }
-        guard !failed.isEmpty else { return }
+        settings.failedHotKeys = failed
+    }
 
-        let alert = NSAlert()
-        alert.messageText = "단축키를 등록하지 못했어요"
-        alert.informativeText = "다른 앱이 이미 쓰고 있는 단축키예요: \(failed.joined(separator: ", ")).\n"
-            + "Shottr 같은 캡처 앱을 끄거나 그 앱의 단축키를 바꾼 뒤 Grabby를 다시 실행해 주세요. 그동안은 메뉴바에서 캡처할 수 있어요."
-        NSApp.activate(ignoringOtherApps: true)
-        alert.runModal()
+    private func perform(_ action: HotKeyAction) {
+        switch action {
+        case .captureArea: captureArea()
+        case .repeatLastArea: repeatLastArea()
+        }
+    }
+
+    /// 메뉴에 지금 단축키를 보여 준다.
+    private func updateHotKeyItems(_ combos: [String: KeyCombo]) {
+        for (action, item) in hotKeyItems {
+            let combo = combos[action.rawValue]
+            item.keyEquivalent = combo?.menuKey ?? ""
+            item.keyEquivalentModifierMask = combo?.menuModifiers ?? []
+        }
     }
 
     /// 실행 중에 응용 프로그램 폴더에서 다시 열면 캡처 창을 보여 준다.
@@ -60,28 +73,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.button?.image = image
 
         let menu = NSMenu()
-        menu.delegate = self
-        menu.addItem(item("영역 캡처", key: "1", action: #selector(captureArea)))
-        menu.addItem(item("마지막 영역 다시 캡처", key: "2", action: #selector(repeatLastArea)))
+        let capture = item(HotKeyAction.captureArea.title, action: #selector(captureArea))
+        let repeatLast = item(HotKeyAction.repeatLastArea.title, action: #selector(repeatLastArea))
+        hotKeyItems = [.captureArea: capture, .repeatLastArea: repeatLast]
+        menu.addItem(capture)
+        menu.addItem(repeatLast)
         menu.addItem(.separator())
-        menu.addItem(item("캡처 창 열기", key: "", action: #selector(openLibrary)))
+        menu.addItem(item("캡처 창 열기", action: #selector(openLibrary)))
         menu.addItem(.separator())
-        loginItem = item("로그인 시 실행", key: "", action: #selector(toggleLoginItem))
-        menu.addItem(loginItem)
+        let settingsItem = item("설정…", action: #selector(openSettings))
+        settingsItem.keyEquivalent = ","
+        settingsItem.keyEquivalentModifierMask = .command
+        menu.addItem(settingsItem)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Grabby 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
     }
 
-    private func item(_ title: String, key: String, action: Selector) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
-        item.keyEquivalentModifierMask = [.command, .shift]
+    private func item(_ title: String, action: Selector) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
         item.target = self
         return item
-    }
-
-    func menuWillOpen(_ menu: NSMenu) {
-        loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
     }
 
     /// 메뉴바 앱이라 메뉴가 보이지는 않지만, ⌘C·⌘V·⌘Z 같은 편집 단축키가 동작하려면 필요하다.
@@ -107,19 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.mainMenu = main
     }
 
-    @objc private func toggleLoginItem() {
-        do {
-            if SMAppService.mainApp.status == .enabled {
-                try SMAppService.mainApp.unregister()
-            } else {
-                try SMAppService.mainApp.register()
-            }
-        } catch {
-            let alert = NSAlert(error: error)
-            NSApp.activate(ignoringOtherApps: true)
-            alert.runModal()
-        }
-    }
+    @objc private func openSettings() { settingsWindow.show() }
 
     @objc private func openLibrary() {
         if library == nil { library = LibraryWindowController() }
