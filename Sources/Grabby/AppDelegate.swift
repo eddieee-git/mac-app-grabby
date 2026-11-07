@@ -32,6 +32,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.updateHotKeyItems(combos)
         }
         _ = CaptureStore.shared
+        // 다른 캡처 앱이 켜져 있으면 단축키가 겹칠 수 있다고 한 번 알려 준다.
+        let others = HotKeyConflicts.runningCaptureApps
+        if !others.isEmpty {
+            Toast.show(L("%@이(가) 켜져 있어요 · 단축키가 겹치면 설정에서 바꿔 주세요", others.joined(separator: ", ")))
+        }
     }
 
     private func registerHotKeys(_ combos: [String: KeyCombo]) {
@@ -51,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch action {
         case .captureArea: captureArea()
         case .repeatLastArea: repeatLastArea()
+        case .captureFullScreen: captureFullScreen()
         case .whiteboard: openWhiteboard()
         }
     }
@@ -95,13 +101,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         let capture = item(HotKeyAction.captureArea.title, action: #selector(captureArea))
         let repeatLast = item(HotKeyAction.repeatLastArea.title, action: #selector(repeatLastArea))
+        let fullScreen = item(HotKeyAction.captureFullScreen.title, action: #selector(captureFullScreen))
         let whiteboard = item(HotKeyAction.whiteboard.title, action: #selector(openWhiteboard))
-        hotKeyItems = [.captureArea: capture, .repeatLastArea: repeatLast, .whiteboard: whiteboard]
+        hotKeyItems = [.captureArea: capture, .repeatLastArea: repeatLast, .captureFullScreen: fullScreen, .whiteboard: whiteboard]
         menu.addItem(capture)
         menu.addItem(repeatLast)
+        menu.addItem(fullScreen)
         menu.addItem(whiteboard)
         menu.addItem(.separator())
         menu.addItem(item(L("캡처 창 열기"), action: #selector(openLibrary)))
+        menu.addItem(item(L("띄운 캡처 모두 닫기"), action: #selector(closeAllPins)))
         menu.addItem(.separator())
         let settingsItem = item(L("설정…"), action: #selector(openSettings))
         settingsItem.keyEquivalent = ","
@@ -130,6 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let editItem = NSMenuItem()
         let edit = NSMenu(title: L("편집"))
         edit.addItem(NSMenuItem(title: L("실행 취소"), action: Selector(("undo:")), keyEquivalent: "z"))
+        edit.addItem(NSMenuItem(title: L("다시 실행"), action: Selector(("redo:")), keyEquivalent: "Z"))
         edit.addItem(.separator())
         edit.addItem(NSMenuItem(title: L("오려두기"), action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
         edit.addItem(NSMenuItem(title: L("복사"), action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
@@ -143,6 +153,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openSettings() { settingsWindow.show() }
+    @objc private func closeAllPins() { PinWindow.closeAll() }
 
     @objc private func openLibrary() {
         if library == nil { library = LibraryWindowController() }
@@ -151,44 +162,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: 캡처
 
-    @objc private func captureArea() {
+    /// 화면을 멈춰 찍고 오버레이를 띄운다. 오버레이는 포커스를 빼앗지 않으므로 원래 앱이 계속 앞에 있다.
+    private func startSession(_ mode: CaptureSession.Mode) {
         guard session == nil else { return }
-        guard ScreenCapturer.hasPermission else { ScreenCapturer.requestPermission(); return }
+        if mode != .whiteboard, !ScreenCapturer.hasPermission { ScreenCapturer.requestPermission(); return }
         rememberFrontApp()
         Task { @MainActor in
+            var shots: [ScreenShot] = []
             do {
-                let shots = try await ScreenCapturer.captureAll()
-                guard !shots.isEmpty, session == nil else { return }
-                NSApp.activate(ignoringOtherApps: true)
-                session = CaptureSession(shots: shots) { [weak self] result in
-                    self?.session = nil
-                    self?.finishCapture(result)
-                }
+                if ScreenCapturer.hasPermission { shots = try await ScreenCapturer.captureAll() }
             } catch {
-                show(error)
+                if mode != .whiteboard { show(error); return }
             }
-        }
-    }
-
-    /// 실제 화면을 어둡게 깔고 가운데에 흰 바탕을 띄워 그리게 한다.
-    /// 화면 기록 권한이 없으면 바깥도 흰 바탕으로 띄운다.
-    @objc private func openWhiteboard() {
-        guard session == nil else { return }
-        rememberFrontApp()
-        Task { @MainActor in
-            var shots = (try? await ScreenCapturer.hasPermission ? ScreenCapturer.captureAll() : []) ?? []
-            if shots.isEmpty {
+            // 화이트보드는 권한이 없으면 바깥도 바탕으로 띄운다.
+            if shots.isEmpty, mode == .whiteboard {
                 let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
                 if let screen, let board = ScreenShot.whiteboard(on: screen) { shots = [board] }
             }
             guard !shots.isEmpty, session == nil else { return }
-            NSApp.activate(ignoringOtherApps: true)
-            session = CaptureSession(shots: shots, whiteboard: true) { [weak self] result in
+            session = CaptureSession(shots: shots, mode: mode) { [weak self] result in
                 self?.session = nil
                 self?.finishCapture(result)
             }
         }
     }
+
+    @objc private func captureArea() { startSession(.area) }
+    @objc private func captureFullScreen() { startSession(.fullScreen) }
+    @objc private func openWhiteboard() { startSession(.whiteboard) }
 
     /// 마지막으로 고른 영역을 편집 없이 바로 다시 찍어 복사한다.
     @objc private func repeatLastArea() {
@@ -208,32 +209,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     captureArea()
                     return
                 }
-                save(CaptureResult(image: image, pixelScale: shot.scale, rect: rect, displayID: displayID))
+                save(CaptureResult(image: image, pixelScale: shot.scale, rect: rect, displayID: displayID, screenFrame: shot.screen.frame))
             } catch {
                 show(error)
             }
         }
     }
 
+    /// 복사하고 탭에 넣는다. 찍은 자리를 반짝이고 소리를 낸다.
     private func save(_ result: CaptureResult) {
-        let item = CaptureStore.shared.add(result.image, scale: result.pixelScale)
+        let (item, pruned) = CaptureStore.shared.add(result.image, scale: result.pixelScale,
+                                                     original: result.original, annotations: result.annotations)
         Clipboard.copy(result.image, scale: result.pixelScale)
         if !result.isWhiteboard {
             UserDefaults.standard.set(NSStringFromRect(result.rect), forKey: lastRectKey)
             UserDefaults.standard.set(Int(result.displayID), forKey: lastDisplayKey)
         }
-        Toast.show(L("복사했어요 · ⌘V로 붙여 넣기"), image: CaptureStore.shared.thumbnail(for: item))
+        CaptureFeedback.flash(result.globalRect)
+        let message = pruned > 0 ? L("복사했어요 · 오래된 캡처 %ld개를 정리했어요", pruned) : L("복사했어요 · ⌘V로 붙여 넣기")
+        Toast.show(message, image: CaptureStore.shared.thumbnail(for: item))
         if library == nil { library = LibraryWindowController() }
         library?.showWithoutFocus()
     }
 
-    /// 캡처·화이트보드를 마친 뒤: 복사하고 탭에 넣고, ⌘S였으면 저장 창을 띄운 다음 원래 앱으로 돌아간다.
+    /// 캡처·화이트보드를 마친 뒤 고른 동작을 하고 원래 앱으로 돌아간다.
     private func finishCapture(_ result: CaptureResult?) {
         guard let result else { returnToPreviousApp(); return }
-        save(result)
-        if result.wantsSave {
+        switch result.action {
+        case .ocr:
+            // 글자만 복사하고 탭에는 넣지 않는다.
+            Task { @MainActor in
+                let text = await TextRecognizer.recognize(result.image)
+                if text.isEmpty {
+                    Toast.show(L("글자를 찾지 못했어요"))
+                } else {
+                    Clipboard.copy(text: text)
+                    let firstLine = text.split(separator: "\n").first.map(String.init) ?? text
+                    Toast.show(L("글자를 복사했어요 · %@", String(firstLine.prefix(40))))
+                }
+                returnToPreviousApp()
+            }
+        case .save:
+            save(result)
             ImageSaver.save(result.image, scale: result.pixelScale) { [weak self] in self?.returnToPreviousApp() }
-        } else {
+        case .pin:
+            save(result)
+            PinWindow.show(result.image, scale: result.pixelScale, at: result.globalRect)
+            returnToPreviousApp()
+        case .copy:
+            save(result)
             returnToPreviousApp()
         }
     }

@@ -26,6 +26,37 @@ extension ScreenShot {
         return ScreenShot(screen: screen, displayID: screen.displayID, image: image)
     }
 
+    /// 화이트보드 바탕. 모눈과 줄 간격은 포인트 기준이라 레티나에서도 같은 크기로 보인다.
+    static func board(_ style: AppSettings.BoardStyle, width: Int, height: Int, scale: CGFloat) -> CGImage? {
+        guard width > 0, height > 0, let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                                            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        let w = CGFloat(width), h = CGFloat(height)
+        let background = style == .dark ? CGColor(srgbRed: 0.17, green: 0.2, blue: 0.19, alpha: 1) : CGColor(gray: 1, alpha: 1)
+        context.setFillColor(background)
+        context.fill(CGRect(x: 0, y: 0, width: w, height: h))
+        context.setLineWidth(max(1, scale * 0.5))
+        switch style {
+        case .grid:
+            let step = 20 * scale
+            context.setStrokeColor(CGColor(srgbRed: 0.85, green: 0.88, blue: 0.92, alpha: 1))
+            var x: CGFloat = step
+            while x < w { context.move(to: CGPoint(x: x, y: 0)); context.addLine(to: CGPoint(x: x, y: h)); x += step }
+            var y: CGFloat = h - step
+            while y > 0 { context.move(to: CGPoint(x: 0, y: y)); context.addLine(to: CGPoint(x: w, y: y)); y -= step }
+            context.strokePath()
+        case .lines:
+            let step = 28 * scale
+            context.setStrokeColor(CGColor(srgbRed: 0.78, green: 0.84, blue: 0.93, alpha: 1))
+            var y: CGFloat = h - step
+            while y > 0 { context.move(to: CGPoint(x: 0, y: y)); context.addLine(to: CGPoint(x: w, y: y)); y -= step }
+            context.strokePath()
+        case .white, .dark:
+            break
+        }
+        return context.makeImage()
+    }
+
     static func white(width: Int, height: Int) -> CGImage? {
         guard width > 0, height > 0, let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
                                       space: CGColorSpace(name: CGColorSpace.sRGB)!,
@@ -33,6 +64,29 @@ extension ScreenShot {
         context.setFillColor(CGColor(gray: 1, alpha: 1))
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
         return context.makeImage()
+    }
+}
+
+/// 화면에 떠 있는 일반 창들의 영역. 클릭 한 번으로 창 하나를 고를 때 쓴다.
+enum WindowList {
+    /// 앞에 있는 창부터, 지정한 화면 왼쪽 위 기준 포인트 좌표로 돌려준다. Grabby 자신의 창은 뺀다.
+    static func rects(on displayID: CGDirectDisplayID) -> [CGRect] {
+        guard let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
+            return []
+        }
+        let me = ProcessInfo.processInfo.processIdentifier
+        let screen = CGDisplayBounds(displayID)
+        return info.compactMap { window in
+            guard (window[kCGWindowLayer as String] as? Int) == 0,
+                  (window[kCGWindowOwnerPID as String] as? pid_t) != me,
+                  (window[kCGWindowAlpha as String] as? Double ?? 1) > 0,
+                  let bounds = window[kCGWindowBounds as String] as? NSDictionary,
+                  let rect = CGRect(dictionaryRepresentation: bounds),
+                  rect.width >= 40, rect.height >= 40 else { return nil }
+            let visible = rect.intersection(screen)
+            guard !visible.isNull, visible.width >= 40, visible.height >= 40 else { return nil }
+            return visible.offsetBy(dx: -screen.minX, dy: -screen.minY).integral
+        }
     }
 }
 

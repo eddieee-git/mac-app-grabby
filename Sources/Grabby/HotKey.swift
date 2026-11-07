@@ -3,12 +3,13 @@ import Carbon
 
 /// 전역 단축키로 실행할 수 있는 동작.
 enum HotKeyAction: String, CaseIterable {
-    case captureArea, repeatLastArea, whiteboard
+    case captureArea, repeatLastArea, captureFullScreen, whiteboard
 
     var title: String {
         switch self {
         case .captureArea: return L("영역 캡처")
         case .repeatLastArea: return L("마지막 영역 다시 캡처")
+        case .captureFullScreen: return L("전체 화면 캡처")
         case .whiteboard: return L("화이트보드")
         }
     }
@@ -26,6 +27,7 @@ struct KeyCombo: Codable, Equatable {
         return [
             HotKeyAction.captureArea.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_1), modifiers: controlCommand, key: "1"),
             HotKeyAction.repeatLastArea.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_2), modifiers: controlCommand, key: "2"),
+            HotKeyAction.captureFullScreen.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_3), modifiers: controlCommand, key: "3"),
             // 한국어 자판에서 ₩가 찍히는 키(ANSI 자판의 `)
             HotKeyAction.whiteboard.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_Grave), modifiers: controlCommand, key: "`"),
         ]
@@ -98,6 +100,39 @@ struct KeyCombo: Codable, Equatable {
         if mods & controlKey != 0 { flags.insert(.control) }
         if mods & shiftKey != 0 { flags.insert(.shift) }
         return flags
+    }
+}
+
+/// 단축키가 겹칠 수 있는 상대. macOS는 다른 앱이 쓰는 단축키를 알려 주지 않아서,
+/// 알려진 캡처 앱이 켜져 있는지와 macOS 기본 스크린샷 단축키만 확인한다.
+enum HotKeyConflicts {
+    /// 번들 ID 앞부분 → 앱 이름
+    private static let captureApps: [(prefix: String, name: String)] = [
+        ("cc.ffitch.shottr", "Shottr"),
+        ("pl.maketheweb.cleanshotx", "CleanShot X"),
+        ("com.TechSmith.Snagit", "Snagit"),
+        ("com.monosnap", "Monosnap"),
+        ("com.skillbrains.lightshot", "Lightshot"),
+        ("com.Snipaste", "Snipaste"),
+        ("com.xnapper", "Xnapper"),
+        ("com.droplr", "Droplr"),
+        ("io.zappy", "Zappy"),
+    ]
+
+    /// 지금 켜져 있는 캡처 앱 이름들.
+    static var runningCaptureApps: [String] {
+        let ids = NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier)
+        return captureApps.filter { app in ids.contains { $0.hasPrefix(app.prefix) } }.map(\.name)
+    }
+
+    /// macOS 기본 스크린샷 단축키(⇧⌘3·4·5·6, ⌃⇧⌘3·4)와 같으면 그 이름.
+    static func systemShortcut(_ combo: KeyCombo) -> String? {
+        let shiftCommand = UInt32(shiftKey | cmdKey), withControl = UInt32(controlKey | shiftKey | cmdKey)
+        let keys: [Int: String] = [kVK_ANSI_3: "3", kVK_ANSI_4: "4", kVK_ANSI_5: "5", kVK_ANSI_6: "6"]
+        guard let key = keys[Int(combo.keyCode)] else { return nil }
+        if combo.modifiers == shiftCommand { return "⇧⌘" + key }
+        if combo.modifiers == withControl, key == "3" || key == "4" { return "⌃⇧⌘" + key }
+        return nil
     }
 }
 

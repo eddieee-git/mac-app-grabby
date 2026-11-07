@@ -1,13 +1,19 @@
 import AppKit
+import Carbon
 
 /// 캡처 탭 창. 캡처할 때마다 오른쪽 끝에 탭이 하나씩 늘어나고, 고른 탭을 보고, 이어서 편집하고, 다시 복사한다.
+/// 표시가 있는 캡처는 원본과 표시를 따로 저장해 두어, 나중에 열어도 표시를 다시 고르고 고칠 수 있다.
 final class LibraryWindowController: NSWindowController, NSWindowDelegate {
     private let store = CaptureStore.shared
     private let canvas = AnnotationCanvas(image: LibraryWindowController.blank, pixelScale: 1)
+    private let canvasScroll = ZoomScrollView()
     private let emptyLabel = NSTextField(labelWithString: L("아직 캡처가 없어요.\n메뉴바의 영역 캡처나 단축키로 화면을 캡처해 보세요."))
     private let tabStrip = NSStackView()
     private let tabScroll = NSScrollView()
     private let pinButton = NSButton()
+    private let listButton = NSButton()
+    private let keepButton = NSButton()
+    private let zoomLabel = NSTextField(labelWithString: "")
     private var tabs: [CaptureTab] = []
     private var selectedID: UUID?
     private var shownID: UUID?
@@ -23,10 +29,10 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
     }()
 
     init() {
-        let window = LibraryWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 620),
+        let window = LibraryWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 640),
                                    styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "Grabby"
-        window.minSize = NSSize(width: 520, height: 360)
+        window.minSize = NSSize(width: 640, height: 420)
         window.isReleasedWhenClosed = false
         window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         super.init(window: window)
@@ -58,12 +64,15 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         window?.orderFrontRegardless()
     }
 
+    // MARK: 화면 구성
+
     private func build() {
         guard let content = window?.contentView else { return }
 
+        // 위: 모든 캡처 목록 · 탭 · 항상 위에
         tabStrip.orientation = .horizontal
         tabStrip.spacing = 4
-        tabStrip.edgeInsets = NSEdgeInsets(top: 0, left: 8, bottom: 0, right: 8)
+        tabStrip.edgeInsets = NSEdgeInsets(top: 0, left: 4, bottom: 0, right: 8)
         tabStrip.translatesAutoresizingMaskIntoConstraints = false
         tabScroll.documentView = tabStrip
         tabScroll.hasHorizontalScroller = true
@@ -78,40 +87,74 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
             tabStrip.bottomAnchor.constraint(equalTo: clip.bottomAnchor),
         ])
 
-        pinButton.bezelStyle = .texturedRounded
+        configure(listButton, symbol: "square.grid.2x2", tip: L("모든 캡처 보기"), action: #selector(showList))
+        configure(pinButton, symbol: "pin", tip: L("창을 항상 위에 두기"), action: #selector(pinToggled))
         pinButton.setButtonType(.toggle)
-        pinButton.image = NSImage(systemSymbolName: "pin", accessibilityDescription: L("항상 위에"))
         pinButton.alternateImage = NSImage(systemSymbolName: "pin.fill", accessibilityDescription: L("항상 위에"))
-        pinButton.toolTip = L("창을 항상 위에 두기")
-        pinButton.target = self
-        pinButton.action = #selector(pinToggled)
 
         let header = NSView()
-        let divider = NSBox()
-        divider.boxType = .separator
+        let topDivider = NSBox()
+        topDivider.boxType = .separator
 
-        // 탭 창에서는 기본으로 부분 선택 도구를 골라 둔다. 드래그로 고르고 ⌘C로 그 부분만 복사한다.
+        // 가운데: 편집 도구와 이미지
         canvas.tool = .select
-        let toolbar = EditToolbar(canvas: canvas, tools: Tool.allCases, actions: [
-            .init(symbol: "doc.on.doc", title: L("복사 (⌘C) · 고른 부분이 있으면 그 부분만")) { [weak self] in self?.copyCurrent() },
-            .init(symbol: "square.and.arrow.down", title: L("파일로 저장 (⌘S) · 고른 부분이 있으면 그 부분만")) { [weak self] in self?.saveCurrent() },
-            .init(symbol: "folder", title: L("Finder에서 보기")) { [weak self] in self?.revealCurrent() },
-            .init(symbol: "trash", title: L("삭제 (⌫)")) { [weak self] in self?.deleteCurrent() },
-        ])
-
+        canvas.allowsZoom = true
+        canvas.onZoomChange = { [weak self] in self?.layoutCanvas() }
+        let toolbar = EditToolbar(canvas: canvas, tools: Tool.allCases, actions: [])
+        canvasScroll.documentView = canvas
+        canvasScroll.hasVerticalScroller = true
+        canvasScroll.hasHorizontalScroller = true
+        canvasScroll.autohidesScrollers = true
+        canvasScroll.drawsBackground = false
+        canvasScroll.onTile = { [weak self] in self?.layoutCanvas() }
         emptyLabel.alignment = .center
         emptyLabel.textColor = .secondaryLabelColor
 
-        for view in [header, tabScroll, pinButton, divider, toolbar, canvas, emptyLabel] as [NSView] {
+        // 아래: 동작 버튼과 확대·축소
+        configure(keepButton, symbol: "star", tip: L("고정 (★) · 보관 개수를 넘어도 지우지 않아요"), action: #selector(toggleKeep))
+        keepButton.setButtonType(.toggle)
+        keepButton.alternateImage = NSImage(systemSymbolName: "star.fill", accessibilityDescription: nil)
+        let actions = NSStackView(views: [
+            button("doc.on.doc", L("복사 (⌘C) · 고른 부분이 있으면 그 부분만"), #selector(copyAction)),
+            button("square.and.arrow.down", L("파일로 저장 (⌘S) · 고른 부분이 있으면 그 부분만"), #selector(saveAction)),
+            button("pin", L("화면에 띄우기 (⌘P)"), #selector(pinAction)),
+            button("text.viewfinder", L("글자 복사 (⌘T) · 이미지 속 글자를 인식해 복사"), #selector(ocrAction)),
+            keepButton,
+            button("folder", L("Finder에서 보기"), #selector(revealAction)),
+            button("trash", L("삭제 (⌫)"), #selector(deleteAction)),
+        ])
+        actions.spacing = 6
+        zoomLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        zoomLabel.textColor = .secondaryLabelColor
+        zoomLabel.alignment = .center
+        let zoom = NSStackView(views: [
+            button("minus.magnifyingglass", L("축소 (⌘-)"), #selector(zoomOutAction)),
+            zoomLabel,
+            button("plus.magnifyingglass", L("확대 (⌘+)"), #selector(zoomInAction)),
+            button("arrow.up.left.and.down.right.magnifyingglass", L("창에 맞추기 (⌘9)"), #selector(zoomFitAction)),
+            button("1.magnifyingglass", L("실제 크기 (⌘0)"), #selector(zoomActualAction)),
+        ])
+        zoom.spacing = 4
+        let footer = NSView()
+        let bottomDivider = NSBox()
+        bottomDivider.boxType = .separator
+
+        for view in [header, listButton, tabScroll, pinButton, topDivider, toolbar, canvasScroll, emptyLabel,
+                     bottomDivider, footer, actions, zoom, zoomLabel] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
         }
         content.addSubview(header)
+        header.addSubview(listButton)
         header.addSubview(tabScroll)
         header.addSubview(pinButton)
-        content.addSubview(divider)
+        content.addSubview(topDivider)
         content.addSubview(toolbar)
-        content.addSubview(canvas)
+        content.addSubview(canvasScroll)
         content.addSubview(emptyLabel)
+        content.addSubview(bottomDivider)
+        content.addSubview(footer)
+        footer.addSubview(actions)
+        footer.addSubview(zoom)
 
         NSLayoutConstraint.activate([
             header.topAnchor.constraint(equalTo: content.topAnchor),
@@ -119,28 +162,71 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
             header.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             header.heightAnchor.constraint(equalToConstant: 56),
 
-            tabScroll.leadingAnchor.constraint(equalTo: header.leadingAnchor),
+            listButton.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 10),
+            listButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            tabScroll.leadingAnchor.constraint(equalTo: listButton.trailingAnchor, constant: 6),
             tabScroll.trailingAnchor.constraint(equalTo: pinButton.leadingAnchor, constant: -6),
             tabScroll.topAnchor.constraint(equalTo: header.topAnchor, constant: 6),
             tabScroll.bottomAnchor.constraint(equalTo: header.bottomAnchor, constant: -4),
             pinButton.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -10),
             pinButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
 
-            divider.topAnchor.constraint(equalTo: header.bottomAnchor),
-            divider.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            divider.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            topDivider.topAnchor.constraint(equalTo: header.bottomAnchor),
+            topDivider.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            topDivider.trailingAnchor.constraint(equalTo: content.trailingAnchor),
 
-            toolbar.topAnchor.constraint(equalTo: divider.bottomAnchor, constant: 10),
+            toolbar.topAnchor.constraint(equalTo: topDivider.bottomAnchor, constant: 10),
             toolbar.centerXAnchor.constraint(equalTo: content.centerXAnchor),
 
-            canvas.topAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: 10),
-            canvas.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
-            canvas.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
-            canvas.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16),
+            canvasScroll.topAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: 10),
+            canvasScroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12),
+            canvasScroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12),
+            canvasScroll.bottomAnchor.constraint(equalTo: bottomDivider.topAnchor, constant: -8),
 
-            emptyLabel.centerXAnchor.constraint(equalTo: canvas.centerXAnchor),
-            emptyLabel.centerYAnchor.constraint(equalTo: canvas.centerYAnchor),
+            emptyLabel.centerXAnchor.constraint(equalTo: canvasScroll.centerXAnchor),
+            emptyLabel.centerYAnchor.constraint(equalTo: canvasScroll.centerYAnchor),
+
+            bottomDivider.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            bottomDivider.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            bottomDivider.bottomAnchor.constraint(equalTo: footer.topAnchor),
+
+            footer.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            footer.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            footer.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            footer.heightAnchor.constraint(equalToConstant: 40),
+            actions.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 12),
+            actions.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
+            zoom.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -12),
+            zoom.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
+            zoomLabel.widthAnchor.constraint(equalToConstant: 44),
         ])
+    }
+
+    private func configure(_ b: NSButton, symbol: String, tip: String, action: Selector) {
+        b.image = NSImage(systemSymbolName: symbol, accessibilityDescription: tip)
+        b.bezelStyle = .texturedRounded
+        b.toolTip = tip
+        b.target = self
+        b.action = action
+    }
+
+    private func button(_ symbol: String, _ tip: String, _ action: Selector) -> NSButton {
+        let b = NSButton()
+        configure(b, symbol: symbol, tip: tip, action: action)
+        return b
+    }
+
+    /// 창에 맞출 때는 보이는 영역 크기 그대로, 확대했을 때는 이미지 크기만큼 캔버스를 키워 스크롤한다.
+    private func layoutCanvas() {
+        let visible = canvasScroll.contentSize
+        var size = visible
+        if let zoom = canvas.zoom {
+            let image = canvas.imageSize
+            size = CGSize(width: max(visible.width, (image.width * zoom).rounded()), height: max(visible.height, (image.height * zoom).rounded()))
+        }
+        if canvas.frame.size != size { canvas.frame = CGRect(origin: .zero, size: size) }
+        canvas.needsDisplay = true
+        zoomLabel.stringValue = canvas.zoom.map { "\(Int(($0 * 100).rounded()))%" } ?? L("맞춤")
     }
 
     // MARK: 탭
@@ -172,6 +258,9 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
 
     private func updateSelection() {
         for tab in tabs { tab.isSelected = tab.item.id == selectedID }
+        let kept = selectedItem?.isKept == true
+        keepButton.state = kept ? .on : .off
+        keepButton.contentTintColor = kept ? .systemYellow : nil
     }
 
     /// 왼쪽(-1)이나 오른쪽(+1) 탭으로 옮긴다.
@@ -190,73 +279,166 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
             knownNewest = newest.id
             select(newest.id)
         } else {
-            select(selectedID ?? newest?.id)
+            select(selectedID ?? newest?.id, reveal: false)
         }
     }
 
     private var selectedItem: CaptureItem? { store.items.first { $0.id == selectedID } }
 
     private func showSelected() {
-        guard let item = selectedItem, let image = store.image(for: item) else {
+        guard let item = selectedItem, let editable = store.editable(for: item) else {
             shownID = nil
-            canvas.setImage(Self.blank, pixelScale: 1)
-            canvas.isHidden = true
+            canvas.load(Self.blank, pixelScale: 1)
+            canvasScroll.isHidden = true
             emptyLabel.isHidden = !store.items.isEmpty
             return
         }
         guard item.id != shownID else { return }
         shownID = item.id
-        canvas.isHidden = false
+        canvasScroll.isHidden = false
         emptyLabel.isHidden = true
-        canvas.setImage(image, pixelScale: item.scale)
+        canvas.load(editable.image, pixelScale: item.scale, annotations: editable.annotations)
+        layoutCanvas()
     }
 
-    /// 보던 캡처에 그린 표시를 이미지에 합쳐 저장한다.
+    /// 보던 캡처의 표시가 바뀌었으면 저장한다. 원본과 표시도 함께 두어 다시 고칠 수 있게 한다.
     private func saveEdits() {
-        guard let id = shownID, let item = store.items.first(where: { $0.id == id }), canvas.hasEdits else { return }
-        persist(item, canvas.render())
+        guard let id = shownID, let item = store.items.first(where: { $0.id == id }), canvas.isDirty || canvas.isEditingText else { return }
+        persist(item)
     }
 
     /// 탭 순서는 그대로 두고 이미지만 바꾼다. 저장 알림으로 탭을 다시 만들지 않게 막는다.
-    private func persist(_ item: CaptureItem, _ image: CGImage) {
+    private func persist(_ item: CaptureItem) {
+        let flattened = canvas.render()
         isPersisting = true
-        store.replace(item, with: image)
+        store.replace(item, with: flattened, original: canvas.image, annotations: canvas.annotations)
         isPersisting = false
+        canvas.markSaved()
         tabs.first { $0.item.id == item.id }?.thumbnail = store.thumbnail(for: item)
     }
 
     // MARK: 동작
 
+    /// 지금 보는 이미지(표시를 합친 것). 고른 부분이 있으면 그 부분만.
+    private func currentImage() -> CGImage? {
+        guard let item = selectedItem else { return nil }
+        if let part = canvas.selectedImage() { return part }
+        if item.id == shownID, canvas.isDirty || canvas.isEditingText { persist(item) }
+        return store.image(for: item)
+    }
+
     func copyCurrent() {
         guard let item = selectedItem else { return }
-        if let part = canvas.selectedImage() {
-            Clipboard.copy(part, scale: item.scale)
-            Toast.show(L("선택한 부분을 복사했어요"), image: NSImage(cgImage: part, size: .zero))
-            return
-        }
-        if canvas.hasEdits, item.id == shownID {
-            let image = canvas.render()
-            persist(item, image)
-            canvas.setImage(image, pixelScale: item.scale)
-        }
-        guard let image = store.image(for: item) else { return }
+        let isPart = canvas.selectionRect != nil
+        guard let image = currentImage() else { return }
         Clipboard.copy(image, scale: item.scale)
-        Toast.show(L("복사했어요"), image: store.thumbnail(for: item))
+        Toast.show(isPart ? L("선택한 부분을 복사했어요") : L("복사했어요"), image: NSImage(cgImage: image, size: .zero))
     }
 
     /// 지금 탭을 파일로 저장한다. 그린 표시는 합치고, 고른 부분이 있으면 그 부분만 저장한다.
     func saveCurrent() {
-        guard let item = selectedItem else { return }
-        let image = canvas.selectedImage() ?? (item.id == shownID && canvas.hasEdits ? canvas.render() : store.image(for: item))
-        guard let image else { return }
+        guard let item = selectedItem, let image = currentImage() else { return }
         ImageSaver.save(image, scale: item.scale, date: item.date) { [weak self] in
             self?.window?.makeKeyAndOrderFront(nil)
         }
     }
 
-    private func revealCurrent() {
+    /// 화면 가운데쯤에 실제 크기로 띄운다.
+    func pinCurrent() {
+        guard let item = selectedItem, let image = currentImage(), let screen = window?.screen ?? NSScreen.main else { return }
+        let size = CGSize(width: CGFloat(image.width) / item.scale, height: CGFloat(image.height) / item.scale)
+        let visible = screen.visibleFrame
+        let frame = CGRect(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2, width: size.width, height: size.height)
+        PinWindow.show(image, scale: item.scale, at: frame)
+    }
+
+    func recognizeCurrent() {
+        guard let image = currentImage() else { return }
+        Task { @MainActor in
+            let text = await TextRecognizer.recognize(image)
+            if text.isEmpty {
+                Toast.show(L("글자를 찾지 못했어요"))
+            } else {
+                Clipboard.copy(text: text)
+                let firstLine = text.split(separator: "\n").first.map(String.init) ?? text
+                Toast.show(L("글자를 복사했어요 · %@", String(firstLine.prefix(40))))
+            }
+        }
+    }
+
+    @objc private func copyAction() { copyCurrent() }
+    @objc private func saveAction() { saveCurrent() }
+    @objc private func pinAction() { pinCurrent() }
+    @objc private func ocrAction() { recognizeCurrent() }
+    @objc private func deleteAction() { deleteCurrent() }
+    @objc private func zoomInAction() { canvas.zoomIn() }
+    @objc private func zoomOutAction() { canvas.zoomOut() }
+    @objc private func zoomFitAction() { canvas.zoomToFit() }
+    @objc private func zoomActualAction() { canvas.zoomToActualSize() }
+
+    @objc private func revealAction() {
         guard let item = selectedItem else { return }
         NSWorkspace.shared.activateFileViewerSelecting([store.url(for: item)])
+    }
+
+    @objc private func toggleKeep() {
+        guard let item = selectedItem else { return }
+        isPersisting = true
+        store.setKept(item, !item.isKept)
+        isPersisting = false
+        reloadTabs()
+        updateSelection()
+    }
+
+    /// 모든 캡처를 날짜별로 보여 주는 메뉴. 고르면 그 탭으로 간다.
+    @objc private func showList() {
+        let menu = NSMenu()
+        let locale = Locale(identifier: Localization.language == .korean ? "ko_KR" : "en_US")
+        let dayFormatter = DateFormatter()
+        dayFormatter.locale = locale
+        dayFormatter.setLocalizedDateFormatFromTemplate("MMMMdEEE")
+        let timeFormatter = DateFormatter()
+        timeFormatter.locale = locale
+        timeFormatter.timeStyle = .short
+        var lastDay: String?
+        for item in store.items {
+            let day = dayFormatter.string(from: item.date)
+            if day != lastDay {
+                if lastDay != nil { menu.addItem(.separator()) }
+                let header = NSMenuItem(title: day, action: nil, keyEquivalent: "")
+                header.isEnabled = false
+                menu.addItem(header)
+                lastDay = day
+            }
+            let title = "\(item.isKept ? "★ " : "")\(timeFormatter.string(from: item.date))  ·  \(item.width)×\(item.height)"
+            let entry = NSMenuItem(title: title, action: #selector(listPicked(_:)), keyEquivalent: "")
+            entry.target = self
+            entry.representedObject = item.id
+            entry.state = item.id == selectedID ? .on : .off
+            if let thumb = store.thumbnail(for: item) {
+                let size = thumb.size, h: CGFloat = 32
+                entry.image = NSImage(size: NSSize(width: min(64, size.width * h / max(size.height, 1)), height: h), flipped: false) { rect in
+                    thumb.draw(in: rect)
+                    return true
+                }
+            }
+            menu.addItem(entry)
+        }
+        if store.items.isEmpty {
+            let empty = NSMenuItem(title: L("아직 캡처가 없어요."), action: nil, keyEquivalent: "")
+            empty.isEnabled = false
+            menu.addItem(empty)
+        }
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: listButton.bounds.height + 4), in: listButton)
+    }
+
+    @objc private func listPicked(_ sender: NSMenuItem) {
+        if let id = sender.representedObject as? UUID { select(id) }
+    }
+
+    /// ⌫: 고른 표시가 있으면 그것만, 없으면 탭을 지운다.
+    func deleteKey() {
+        if !canvas.deleteSelected() { deleteCurrent() }
     }
 
     func deleteCurrent() {
@@ -286,7 +468,7 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         let wasSelected = id == selectedID
         if wasSelected {
             shownID = nil
-            canvas.setImage(Self.blank, pixelScale: 1)
+            canvas.load(Self.blank, pixelScale: 1)
         }
         isPersisting = true
         store.remove(item)
@@ -295,6 +477,7 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         reloadTabs()
         if wasSelected {
             let next = tabs.isEmpty ? nil : tabs[min(index, tabs.count - 1)].item.id
+            selectedID = nil
             select(next)
         } else {
             select(selectedID, reveal: false)
@@ -311,8 +494,11 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func undoAnnotation() { canvas.undo() }
+    func redoAnnotation() { canvas.redo() }
+    func zoom(_ action: (AnnotationCanvas) -> Void) { action(canvas) }
 
-    func clearPartSelection() { canvas.clearSelection() }
+    /// Esc: 고른 표시나 부분 선택을 푼다.
+    func clearSelections() { _ = canvas.clearSelections() }
 
     var isEditingText: Bool { canvas.isEditingText }
 
@@ -321,13 +507,40 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) { saveEdits() }
 }
 
-/// 탭 창의 단축키(⌘C, ⌘Z, ⌫, ←/→, 도구 글자)를 받는다.
+/// 캔버스를 담는 스크롤 영역. 크기가 바뀔 때마다 캔버스 크기를 다시 맞춘다.
+final class ZoomScrollView: NSScrollView {
+    var onTile: (() -> Void)?
+
+    override func tile() {
+        super.tile()
+        onTile?()
+    }
+}
+
+/// 탭 창의 단축키를 받는다.
 final class LibraryWindow: NSWindow {
     weak var library: LibraryWindowController?
 
     @objc func copy(_ sender: Any?) { library?.copyCurrent() }
     @objc func saveDocument(_ sender: Any?) { library?.saveCurrent() }
     @objc func undo(_ sender: Any?) { library?.undoAnnotation() }
+    @objc func redo(_ sender: Any?) { library?.redoAnnotation() }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let mods = event.modifierFlags.intersection([.command, .shift, .option, .control])
+        guard let library, mods.contains(.command), !library.isEditingText else { return super.performKeyEquivalent(with: event) }
+        switch Int(event.keyCode) {
+        case kVK_ANSI_P where mods == .command: library.pinCurrent()
+        case kVK_ANSI_T where mods == .command: library.recognizeCurrent()
+        case kVK_ANSI_Equal: library.zoom { $0.zoomIn() }
+        case kVK_ANSI_Minus: library.zoom { $0.zoomOut() }
+        case kVK_ANSI_0 where mods == .command: library.zoom { $0.zoomToActualSize() }
+        case kVK_ANSI_9 where mods == .command: library.zoom { $0.zoomToFit() }
+        case kVK_ANSI_Z where mods == [.command, .shift]: library.redoAnnotation()
+        default: return super.performKeyEquivalent(with: event)
+        }
+        return true
+    }
 
     override func keyDown(with event: NSEvent) {
         guard let library, !library.isEditingText,
@@ -335,11 +548,11 @@ final class LibraryWindow: NSWindow {
             super.keyDown(with: event)
             return
         }
-        switch event.keyCode {
-        case 51, 117: library.deleteCurrent() // ⌫, ⌦
-        case 53: library.clearPartSelection() // Esc
-        case 123: library.moveSelection(by: -1) // ←
-        case 124: library.moveSelection(by: 1) // →
+        switch Int(event.keyCode) {
+        case kVK_Delete, kVK_ForwardDelete: library.deleteKey()
+        case kVK_Escape: library.clearSelections()
+        case kVK_LeftArrow: library.moveSelection(by: -1)
+        case kVK_RightArrow: library.moveSelection(by: 1)
         default:
             if let tool = Tool.forKeyCode(event.keyCode) { library.selectTool(tool) } else { super.keyDown(with: event) }
         }
@@ -352,6 +565,7 @@ final class CaptureTab: NSView, NSDraggingSource {
     private let fileURL: URL
     private let imageView = NSImageView()
     private let label: NSTextField
+    private let star = NSImageView()
     private let closeButton = NSButton()
     private var mouseDownPoint: CGPoint?
 
@@ -364,32 +578,18 @@ final class CaptureTab: NSView, NSDraggingSource {
         set { imageView.image = newValue }
     }
 
-    var isSelected = false {
-        didSet {
-            layer?.backgroundColor = isSelected ? NSColor.controlAccentColor.withAlphaComponent(0.25).cgColor
-                                                : NSColor.labelColor.withAlphaComponent(0.05).cgColor
-            label.textColor = isSelected ? .labelColor : .secondaryLabelColor
-        }
-    }
-
-    private static let timeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ko_KR")
-        f.dateFormat = "a h:mm:ss"
-        return f
-    }()
-
-    private static let dayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ko_KR")
-        f.dateFormat = "M/d a h:mm"
-        return f
-    }()
+    var isSelected = false { didSet { applyColors() } }
 
     init(item: CaptureItem, thumbnail: NSImage?, fileURL: URL) {
         self.item = item
         self.fileURL = fileURL
-        let formatter = Calendar.current.isDateInToday(item.date) ? Self.timeFormatter : Self.dayFormatter
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: Localization.language == .korean ? "ko_KR" : "en_US")
+        if Calendar.current.isDateInToday(item.date) {
+            formatter.timeStyle = .medium
+        } else {
+            formatter.setLocalizedDateFormatFromTemplate("Mdjmm")
+        }
         label = NSTextField(labelWithString: formatter.string(from: item.date))
         super.init(frame: .zero)
         wantsLayer = true
@@ -400,6 +600,9 @@ final class CaptureTab: NSView, NSDraggingSource {
         imageView.imageScaling = .scaleProportionallyDown
         label.font = .systemFont(ofSize: 11)
         label.lineBreakMode = .byTruncatingTail
+        star.image = NSImage(systemSymbolName: "star.fill", accessibilityDescription: L("고정"))
+        star.contentTintColor = .systemYellow
+        star.isHidden = !item.isKept
         closeButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: L("닫기"))
         closeButton.isBordered = false
         closeButton.imageScaling = .scaleProportionallyDown
@@ -408,7 +611,7 @@ final class CaptureTab: NSView, NSDraggingSource {
         closeButton.target = self
         closeButton.action = #selector(closeTapped)
 
-        for view in [imageView, label, closeButton] {
+        for view in [imageView, label, star, closeButton] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -419,6 +622,10 @@ final class CaptureTab: NSView, NSDraggingSource {
             imageView.centerYAnchor.constraint(equalTo: centerYAnchor),
             imageView.widthAnchor.constraint(equalToConstant: 48),
             imageView.heightAnchor.constraint(equalToConstant: 32),
+            star.leadingAnchor.constraint(equalTo: imageView.leadingAnchor, constant: -2),
+            star.topAnchor.constraint(equalTo: imageView.topAnchor, constant: -3),
+            star.widthAnchor.constraint(equalToConstant: 12),
+            star.heightAnchor.constraint(equalToConstant: 12),
             label.leadingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: 6),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
             label.trailingAnchor.constraint(lessThanOrEqualTo: closeButton.leadingAnchor, constant: -2),
@@ -427,10 +634,24 @@ final class CaptureTab: NSView, NSDraggingSource {
             closeButton.widthAnchor.constraint(equalToConstant: 14),
             closeButton.heightAnchor.constraint(equalToConstant: 14),
         ])
-        isSelected = false
+        applyColors()
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    /// 레이어 색은 테마가 바뀌어도 저절로 바뀌지 않아서 다시 칠한다.
+    private func applyColors() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            layer?.backgroundColor = isSelected ? NSColor.controlAccentColor.withAlphaComponent(0.25).cgColor
+                                                : NSColor.labelColor.withAlphaComponent(0.05).cgColor
+        }
+        label.textColor = isSelected ? .labelColor : .secondaryLabelColor
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyColors()
+    }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 

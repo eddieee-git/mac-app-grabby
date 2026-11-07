@@ -45,10 +45,11 @@ final class EditToolbar: NSVisualEffectView {
         colors.action = #selector(colorChanged)
         widths.target = self
         widths.action = #selector(widthChanged)
-        for (index, title) in [L("얇게"), L("보통"), L("굵게")].enumerated() { widths.setToolTip(L("선 굵기: %@", title), forSegment: index) }
+        for (index, title) in [L("얇게"), L("보통"), L("굵게")].enumerated() { widths.setToolTip(L("선 굵기·글자 크기: %@", title), forSegment: index) }
 
         let undo = button(symbol: "arrow.uturn.backward", title: L("되돌리기 (⌘Z)"), action: #selector(undoTapped))
-        var views: [NSView] = [tools, colors, widths, undo]
+        let redo = button(symbol: "arrow.uturn.forward", title: L("다시 실행 (⇧⌘Z)"), action: #selector(redoTapped))
+        var views: [NSView] = [tools, colors, widths, undo, redo]
         for (index, action) in actions.enumerated() {
             let b = button(symbol: action.symbol, title: action.title, action: #selector(actionTapped(_:)))
             b.tag = index
@@ -100,7 +101,7 @@ final class EditToolbar: NSVisualEffectView {
     private func sync() {
         tools.selectedSegment = toolList.firstIndex(of: canvas.tool) ?? -1
         colors.selectedSegment = AnnotationCanvas.palette.firstIndex(of: canvas.color) ?? 0
-        widths.selectedSegment = AnnotationCanvas.lineWidths.firstIndex(of: canvas.lineWidth) ?? 1
+        widths.selectedSegment = canvas.widthLevel
     }
 
     private func button(symbol: String, title: String, action: Selector) -> NSButton {
@@ -117,19 +118,20 @@ final class EditToolbar: NSVisualEffectView {
 
     @objc private func colorChanged() {
         let index = max(0, colors.selectedSegment)
-        canvas.color = AnnotationCanvas.palette[index]
+        canvas.applyColor(index)
         let settings = AppSettings.shared
         if settings.rememberLastStyle { settings.defaultColorIndex = index }
     }
 
     @objc private func widthChanged() {
         let index = max(0, widths.selectedSegment)
-        canvas.lineWidth = AnnotationCanvas.lineWidths[index]
+        canvas.applyWidthLevel(index)
         let settings = AppSettings.shared
         if settings.rememberLastStyle { settings.defaultWidthIndex = index }
     }
 
     @objc private func undoTapped() { canvas.undo() }
+    @objc private func redoTapped() { canvas.redo() }
 
     @objc private func actionTapped(_ sender: NSButton) { actions[sender.tag].handler() }
 

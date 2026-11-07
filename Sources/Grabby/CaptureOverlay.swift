@@ -1,38 +1,59 @@
 import AppKit
 import Carbon
 
+/// 캡처를 마친 뒤 할 일.
+enum CaptureAction {
+    case copy, save, pin, ocr
+}
+
 /// 영역 캡처를 마친 결과. `rect`는 화면 왼쪽 위 기준 포인트 좌표다.
 struct CaptureResult {
+    /// 표시를 합친 이미지
     let image: CGImage
+    /// 표시가 있을 때 표시 없는 원본(탭에서 다시 고칠 수 있게 함께 저장한다)
+    var original: CGImage? = nil
+    var annotations: [Annotation] = []
     let pixelScale: CGFloat
     let rect: CGRect
     let displayID: CGDirectDisplayID
+    /// 이 화면의 전역 좌표(왼쪽 아래 원점). 핀과 깜빡임 위치를 잡을 때 쓴다.
+    let screenFrame: CGRect
     /// 화이트보드 결과는 화면을 찍은 게 아니므로 '마지막 영역'으로 기억하지 않는다.
     var isWhiteboard = false
-    /// 복사하고 탭에 넣은 뒤 파일로도 저장한다(⌘S).
-    var wantsSave = false
+    var action: CaptureAction = .copy
+
+    /// 캡처한 영역의 전역 좌표(왼쪽 아래 원점).
+    var globalRect: CGRect {
+        CGRect(x: screenFrame.minX + rect.minX, y: screenFrame.maxY - rect.maxY, width: rect.width, height: rect.height)
+    }
 }
 
 /// 멈춘 화면들을 덮어 영역을 고르고, 고른 자리에서 바로 편집하게 한다.
+/// 창은 포커스를 빼앗지 않는 패널이라, 원래 앱은 그대로 앞에 있고 키 입력만 이쪽으로 온다.
 final class CaptureSession {
+    enum Mode { case area, fullScreen, whiteboard }
+
     private var windows: [OverlayWindow] = []
     private let completion: (CaptureResult?) -> Void
     private var finished = false
-    private let isWhiteboard: Bool
+    let mode: Mode
 
-    /// `whiteboard`이면 첫 화면의 가운데 영역을 미리 골라 둔 채 자유그리기로 시작한다.
-    init(shots: [ScreenShot], whiteboard: Bool = false, completion: @escaping (CaptureResult?) -> Void) {
+    init(shots: [ScreenShot], mode: Mode = .area, completion: @escaping (CaptureResult?) -> Void) {
         self.completion = completion
-        isWhiteboard = whiteboard
-        windows = shots.map { OverlayWindow(shot: $0, session: self) }
+        self.mode = mode
+        windows = shots.map { OverlayWindow(shot: $0, session: self, blank: mode == .whiteboard) }
         let mouse = NSEvent.mouseLocation
         for window in windows { window.orderFrontRegardless() }
         // 마우스가 있는 화면이 키 입력을 받게 한다.
         let active = windows.first { $0.frame.contains(mouse) } ?? windows.first
-        active?.makeKeyAndOrderFront(nil)
-        // 화이트보드는 바깥에 실제 화면을 어둡게 보여 주고, 고른 영역만 흰 바탕으로 채운다.
-        if whiteboard { for window in windows { window.overlay.blankCanvas = true } }
-        if whiteboard, let overlay = active?.overlay {
+        active?.makeKey()
+        guard let overlay = active?.overlay else { return }
+        switch mode {
+        case .area:
+            overlay.pointerMoved(to: overlay.convert(active!.convertPoint(fromScreen: mouse), from: nil))
+        case .fullScreen:
+            overlay.preselect(overlay.bounds, tool: AppSettings.shared.captureTool)
+        case .whiteboard:
             let size = overlay.bounds.size
             let board = CGSize(width: min(1200, size.width * 0.8), height: min(800, size.height * 0.75))
             overlay.preselect(CGRect(x: (size.width - board.width) / 2, y: (size.height - board.height) / 2,
@@ -46,16 +67,22 @@ final class CaptureSession {
         if !window.isKeyWindow { window.makeKey() }
     }
 
-    fileprivate func confirm(_ overlay: OverlayView, save: Bool = false) {
+    fileprivate func confirm(_ overlay: OverlayView, _ action: CaptureAction = .copy) {
         guard let canvas = overlay.canvas, let rect = overlay.selection else { return }
-        // 영역 안에서 일부를 다시 골랐으면 그 부분만 복사한다.
+        let frame = overlay.shot.screen.frame
+        let isBoard = mode == .whiteboard
+        // 영역 안에서 일부를 다시 골랐으면 그 부분만 쓴다.
         if let part = canvas.selectedImage(), let sub = canvas.selectionRect {
-            finish(CaptureResult(image: part, pixelScale: canvas.pixelScale, rect: sub.offsetBy(dx: rect.minX, dy: rect.minY),
-                                 displayID: overlay.shot.displayID, isWhiteboard: isWhiteboard, wantsSave: save))
+            let annotations = canvas.annotations.map { $0.offsetBy(dx: -sub.minX, dy: -sub.minY) }
+            finish(CaptureResult(image: part, original: annotations.isEmpty ? nil : canvas.selectedOriginal(), annotations: annotations,
+                                 pixelScale: canvas.pixelScale, rect: sub.offsetBy(dx: rect.minX, dy: rect.minY),
+                                 displayID: overlay.shot.displayID, screenFrame: frame, isWhiteboard: isBoard, action: action))
             return
         }
-        finish(CaptureResult(image: canvas.render(), pixelScale: canvas.pixelScale, rect: rect, displayID: overlay.shot.displayID,
-                             isWhiteboard: isWhiteboard, wantsSave: save))
+        let annotations = canvas.annotations
+        finish(CaptureResult(image: canvas.render(), original: annotations.isEmpty ? nil : canvas.image, annotations: annotations,
+                             pixelScale: canvas.pixelScale, rect: rect, displayID: overlay.shot.displayID, screenFrame: frame,
+                             isWhiteboard: isBoard, action: action))
     }
 
     fileprivate func cancel() { finish(nil) }
@@ -69,44 +96,56 @@ final class CaptureSession {
     }
 }
 
-final class OverlayWindow: NSWindow {
+final class OverlayWindow: NSPanel {
     let overlay: OverlayView
     private weak var session: CaptureSession?
 
-    init(shot: ScreenShot, session: CaptureSession) {
-        overlay = OverlayView(shot: shot)
+    init(shot: ScreenShot, session: CaptureSession, blank: Bool) {
+        overlay = OverlayView(shot: shot, blank: blank)
         self.session = session
-        super.init(contentRect: shot.screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+        super.init(contentRect: shot.screen.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         level = .screenSaver
         isOpaque = true
         hasShadow = false
         isReleasedWhenClosed = false
+        hidesOnDeactivate = false
+        isFloatingPanel = true
+        becomesKeyOnlyIfNeeded = false
+        acceptsMouseMovedEvents = true
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         overlay.session = session
         contentView = overlay
         setFrame(shot.screen.frame, display: false)
+        makeFirstResponder(overlay)
     }
 
     override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { true }
+    override var canBecomeMain: Bool { false }
 
     override func keyDown(with event: NSEvent) {
         let canvas = overlay.canvas
+        let plain = event.modifierFlags.intersection([.command, .control, .option]).isEmpty
         switch Int(event.keyCode) {
         case kVK_Escape:
-            // 일부를 골라 둔 상태면 선택만 푼다.
-            if let canvas = overlay.canvas, canvas.selectionRect != nil { canvas.clearSelection() } else { session?.cancel() }
+            // 고른 표시나 부분 선택이 있으면 그것만 푼다.
+            if canvas?.clearSelections() != true { session?.cancel() }
         case kVK_Return, kVK_ANSI_KeypadEnter:
             session?.confirm(overlay)
+        case kVK_Delete, kVK_ForwardDelete:
+            canvas?.deleteSelected()
         case kVK_LeftArrow, kVK_RightArrow, kVK_UpArrow, kVK_DownArrow:
             let step: CGFloat = event.modifierFlags.contains(.shift) ? 10 : 1
             let code = Int(event.keyCode)
             let dx = code == kVK_LeftArrow ? -step : code == kVK_RightArrow ? step : 0
             let dy = code == kVK_UpArrow ? -step : code == kVK_DownArrow ? step : 0
             overlay.nudge(dx: dx, dy: dy, resize: event.modifierFlags.contains(.option))
+        case kVK_ANSI_C where canvas == nil && plain:
+            overlay.copyColorUnderPointer()
+            session?.cancel()
+        case kVK_ANSI_F where canvas == nil && plain:
+            overlay.preselect(overlay.bounds, tool: AppSettings.shared.captureTool)
         default:
-            if let canvas, event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
-               let tool = Tool.forKeyCode(event.keyCode) {
+            if let canvas, plain, let tool = Tool.forKeyCode(event.keyCode) {
                 canvas.tool = tool
                 invalidateCursorRects(for: canvas)
             } else {
@@ -115,9 +154,21 @@ final class OverlayWindow: NSWindow {
         }
     }
 
-    @objc func copy(_ sender: Any?) { session?.confirm(overlay) }
-    @objc func saveDocument(_ sender: Any?) { session?.confirm(overlay, save: true) }
-    @objc func undo(_ sender: Any?) { overlay.canvas?.undo() }
+    /// 앱이 앞에 있지 않아도 동작하도록 ⌘ 단축키를 직접 받는다. 글자를 입력하는 중에는 입력 칸에 넘긴다.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let mods = event.modifierFlags.intersection([.command, .shift, .option, .control])
+        guard mods.contains(.command), overlay.canvas?.isEditingText != true else { return super.performKeyEquivalent(with: event) }
+        switch Int(event.keyCode) {
+        case kVK_ANSI_C where mods == .command: session?.confirm(overlay, .copy)
+        case kVK_ANSI_S where mods == .command: session?.confirm(overlay, .save)
+        case kVK_ANSI_P where mods == .command: session?.confirm(overlay, .pin)
+        case kVK_ANSI_T where mods == .command: session?.confirm(overlay, .ocr)
+        case kVK_ANSI_Z: mods.contains(.shift) ? overlay.canvas?.redo() : overlay.canvas?.undo()
+        default: return super.performKeyEquivalent(with: event)
+        }
+        return true
+    }
+
     override func cancelOperation(_ sender: Any?) { session?.cancel() }
 }
 
@@ -129,14 +180,25 @@ final class OverlayView: NSView {
     private var toolbar: EditToolbar?
     private var handles: HandlesView?
     private var dragStart: CGPoint?
-    /// 화이트보드: 고른 영역을 화면 대신 흰 바탕으로 채운다.
-    var blankCanvas = false
+    /// 화이트보드: 고른 영역을 화면 대신 바탕 이미지로 채운다.
+    private let blank: Bool
     /// 손잡이를 끌어 영역 크기를 조정하는 중이면 그 손잡이.
     private var resizing: Handle?
+    /// 마우스 아래의 창. 드래그하지 않고 클릭하면 이 창 영역을 고른다.
+    private var hoveredWindow: CGRect?
+    private var windowRects: [CGRect] = []
+    private let loupe = LoupeView()
 
-    init(shot: ScreenShot) {
+    init(shot: ScreenShot, blank: Bool) {
         self.shot = shot
+        self.blank = blank
         super.init(frame: CGRect(origin: .zero, size: shot.screen.frame.size))
+        wantsLayer = true
+        if !blank { windowRects = WindowList.rects(on: shot.displayID) }
+        loupe.isHidden = true
+        addSubview(loupe)
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .activeAlways, .inVisibleRect, .mouseEnteredAndExited],
+                                       owner: self, userInfo: nil))
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -163,10 +225,7 @@ final class OverlayView: NSView {
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: canvas == nil ? .crosshair : .arrow)
         guard canvas != nil, let selection else { return }
-        for handle in Handle.allCases {
-            let cursor: NSCursor = handle.x == 0 ? .resizeUpDown : handle.y == 0 ? .resizeLeftRight : .crosshair
-            addCursorRect(handle.hitRect(in: selection), cursor: cursor)
-        }
+        for handle in Handle.allCases { addCursorRect(handle.hitRect(in: selection), cursor: handle.cursor) }
     }
 
     /// 손잡이는 캔버스 위에 걸쳐 있으므로 캔버스보다 먼저 클릭을 받는다.
@@ -175,19 +234,30 @@ final class OverlayView: NSView {
             let p = convert(point, from: superview)
             if Handle.allCases.contains(where: { $0.hitRect(in: selection).contains(p) }) { return self }
         }
-        return super.hitTest(point)
+        let hit = super.hitTest(point)
+        return hit === loupe ? self : hit
     }
 
     override func draw(_ dirtyRect: NSRect) {
         NSImage(cgImage: shot.image, size: bounds.size)
             .draw(in: bounds, from: .zero, operation: .copy, fraction: 1, respectFlipped: true, hints: nil)
 
+        // 아직 고르기 전이면 마우스 아래 창을 밝게 보여 준다.
+        let hole = selection ?? (dragStart == nil ? hoveredWindow : nil)
         let dim = NSBezierPath(rect: bounds)
-        if let selection { dim.append(NSBezierPath(rect: selection)) }
+        if let hole { dim.append(NSBezierPath(rect: hole)) }
         dim.windingRule = .evenOdd
         NSColor.black.withAlphaComponent(0.35).setFill()
         dim.fill()
 
+        if selection == nil, dragStart == nil, let hoveredWindow {
+            NSColor.controlAccentColor.setStroke()
+            let border = NSBezierPath(rect: hoveredWindow.insetBy(dx: 1, dy: 1))
+            border.lineWidth = 2
+            border.stroke()
+            drawSizeLabel(for: hoveredWindow)
+            return
+        }
         guard let selection else { return }
         NSColor.white.withAlphaComponent(0.9).setStroke()
         let border = NSBezierPath(rect: selection.insetBy(dx: -0.5, dy: -0.5))
@@ -209,6 +279,55 @@ final class OverlayView: NSView {
         text.draw(at: CGPoint(x: box.minX + 5, y: box.minY + 2), withAttributes: attributes)
     }
 
+    // MARK: 돋보기와 마우스 아래 창
+
+    override func mouseMoved(with event: NSEvent) {
+        pointerMoved(to: convert(event.locationInWindow, from: nil))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        loupe.isHidden = true
+    }
+
+    /// 앱이 앞에 있지 않으면 커서 영역이 동작하지 않을 수 있어 직접 커서를 정한다.
+    func pointerMoved(to p: CGPoint) {
+        guard let canvas, let selection else {
+            NSCursor.crosshair.set()
+            showLoupe(at: p)
+            let window = dragStart == nil ? windowRects.first { $0.contains(p) } : nil
+            if window != hoveredWindow {
+                hoveredWindow = window
+                needsDisplay = true
+            }
+            return
+        }
+        loupe.isHidden = true
+        if let handle = Handle.allCases.first(where: { $0.hitRect(in: selection).contains(p) }) {
+            handle.cursor.set()
+        } else if canvas.frame.contains(p), toolbar?.frame.contains(p) != true {
+            (canvas.tool == .text ? NSCursor.iBeam : NSCursor.crosshair).set()
+        } else {
+            NSCursor.arrow.set()
+        }
+    }
+
+    private func showLoupe(at p: CGPoint) {
+        loupe.isHidden = false
+        loupe.update(shot: shot, point: p)
+        let size = loupe.frame.size, gap: CGFloat = 24
+        var origin = CGPoint(x: p.x + gap, y: p.y + gap)
+        if origin.x + size.width > bounds.width { origin.x = p.x - gap - size.width }
+        if origin.y + size.height > bounds.height { origin.y = p.y - gap - size.height }
+        loupe.setFrameOrigin(origin)
+    }
+
+    /// C: 돋보기 가운데 픽셀 색을 #RRGGBB로 복사한다.
+    func copyColorUnderPointer() {
+        guard let hex = loupe.hex else { return }
+        Clipboard.copy(text: hex)
+        Toast.show(L("색을 복사했어요 · %@", hex), image: loupe.swatch)
+    }
+
     // MARK: 영역 선택
 
     override func mouseDown(with event: NSEvent) {
@@ -221,7 +340,8 @@ final class OverlayView: NSView {
         if let canvas, canvas.hasEdits { return }
         reset()
         session?.beginSelection(on: window as! OverlayWindow)
-        dragStart = convert(event.locationInWindow, from: nil)
+        dragStart = p
+        needsDisplay = true
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -233,6 +353,7 @@ final class OverlayView: NSView {
         guard let start = dragStart else { return }
         let x = min(max(p.x, 0), bounds.width), y = min(max(p.y, 0), bounds.height)
         selection = CGRect(x: min(start.x, x), y: min(start.y, y), width: abs(x - start.x), height: abs(y - start.y)).integral
+        showLoupe(at: CGPoint(x: x, y: y))
         needsDisplay = true
     }
 
@@ -242,38 +363,54 @@ final class OverlayView: NSView {
             needsDisplay = true
             return
         }
-        defer { dragStart = nil }
-        guard dragStart != nil, let selection, selection.width >= 4, selection.height >= 4 else {
-            reset()
+        guard let start = dragStart else { return }
+        dragStart = nil
+        if let selection, selection.width >= 4, selection.height >= 4 {
+            beginEditing(selection)
             return
         }
-        beginEditing(selection)
+        // 드래그하지 않고 클릭했으면 그 자리의 창을 고른다.
+        if let window = windowRects.first(where: { $0.contains(start) }) {
+            selection = window
+            beginEditing(window)
+            return
+        }
+        reset()
     }
 
     private func beginEditing(_ rect: CGRect) {
         guard let image = content(for: rect) else { reset(); return }
+        loupe.isHidden = true
+        hoveredWindow = nil
         let canvas = AnnotationCanvas(image: image, pixelScale: shot.scale)
         canvas.frame = rect
-        addSubview(canvas)
+        addSubview(canvas, positioned: .below, relativeTo: loupe)
         self.canvas = canvas
 
-        // 기본 도구는 부분 선택: 영역 안에서 일부를 다시 골라 그 부분만 복사할 수 있다.
         canvas.tool = AppSettings.shared.captureTool
         let toolbar = EditToolbar(canvas: canvas, tools: Tool.allCases, actions: [
             .init(symbol: "xmark", title: L("취소 (Esc)")) { [weak self] in self?.session?.cancel() },
+            .init(symbol: "pin", title: L("화면에 띄우기 (⌘P) · 복사하고 탭에도 추가")) { [weak self] in
+                guard let self else { return }
+                self.session?.confirm(self, .pin)
+            },
+            .init(symbol: "text.viewfinder", title: L("글자 복사 (⌘T) · 이미지 속 글자를 인식해 복사")) { [weak self] in
+                guard let self else { return }
+                self.session?.confirm(self, .ocr)
+            },
             .init(symbol: "square.and.arrow.down", title: L("파일로 저장 (⌘S) · 복사하고 탭에도 추가")) { [weak self] in
                 guard let self else { return }
-                self.session?.confirm(self, save: true)
+                self.session?.confirm(self, .save)
             },
             .init(symbol: "checkmark", title: L("복사하고 탭에 추가 (↩ 또는 ⌘C)"), label: L("완료"), isPrimary: true) { [weak self] in
                 guard let self else { return }
                 self.session?.confirm(self)
             },
-        ], hint: L("안에서 드래그해 일부만 고르기 · 도구로 그리기 · 손잡이·방향키로 영역 조정 · ↩/⌘C 복사 · ⌘S 저장 · Esc 취소"))
-        addSubview(toolbar)
+        ], hint: L("안에서 드래그해 일부만 고르기 · 그린 표시는 눌러서 옮기기·⌫ 지우기 · 손잡이·방향키로 영역 조정 · ↩/⌘C 복사 · Esc 취소"))
+        addSubview(toolbar, positioned: .below, relativeTo: loupe)
         self.toolbar = toolbar
         let handles = HandlesView()
-        addSubview(handles)
+        addSubview(handles, positioned: .below, relativeTo: loupe)
         self.handles = handles
         layoutChrome()
         window?.makeFirstResponder(self)
@@ -281,13 +418,16 @@ final class OverlayView: NSView {
         needsDisplay = true
     }
 
-    /// 캔버스에 놓을 이미지: 화면에서 잘라낸 부분, 화이트보드면 같은 크기의 흰 바탕.
+    /// 캔버스에 놓을 이미지: 화면에서 잘라낸 부분, 화이트보드면 같은 크기의 바탕.
     private func content(for rect: CGRect) -> CGImage? {
-        blankCanvas ? ScreenShot.white(width: Int(rect.width * shot.scale), height: Int(rect.height * shot.scale)) : shot.crop(rect)
+        guard blank else { return shot.crop(rect) }
+        return ScreenShot.board(AppSettings.shared.boardStyle, width: Int(rect.width * shot.scale),
+                                height: Int(rect.height * shot.scale), scale: shot.scale)
     }
 
-    /// 영역을 미리 고른 채 편집을 시작한다(화이트보드).
+    /// 영역을 미리 고른 채 편집을 시작한다(화이트보드, 전체 화면).
     func preselect(_ rect: CGRect, tool: Tool) {
+        reset()
         let rect = rect.intersection(bounds).integral
         guard rect.width >= 4, rect.height >= 4 else { return }
         selection = rect
@@ -339,6 +479,95 @@ final class OverlayView: NSView {
     }
 }
 
+/// 커서 주변을 크게 보여 주는 돋보기. 가운데 픽셀의 좌표와 색도 보여 준다.
+final class LoupeView: NSView {
+    private static let pixels = 15
+    private static let zoomSide: CGFloat = 135
+    private static let labelHeight: CGFloat = 34
+    private var zoomed: CGImage?
+    private var label = ""
+    private(set) var hex: String?
+    private var centerColor: NSColor?
+
+    init() {
+        super.init(frame: CGRect(x: 0, y: 0, width: Self.zoomSide, height: Self.zoomSide + Self.labelHeight))
+        wantsLayer = true
+        layer?.cornerRadius = 8
+        layer?.masksToBounds = true
+        layer?.borderWidth = 1
+        layer?.borderColor = NSColor.white.withAlphaComponent(0.7).cgColor
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var isFlipped: Bool { true }
+
+    var swatch: NSImage? {
+        guard let centerColor else { return nil }
+        return NSImage(size: NSSize(width: 36, height: 36), flipped: false) { rect in
+            centerColor.setFill()
+            NSBezierPath(roundedRect: rect.insetBy(dx: 2, dy: 2), xRadius: 6, yRadius: 6).fill()
+            return true
+        }
+    }
+
+    func update(shot: ScreenShot, point p: CGPoint) {
+        let n = Self.pixels, half = n / 2
+        let px = Int(p.x * shot.scale), py = Int(p.y * shot.scale)
+        let region = CGRect(x: px - half, y: py - half, width: n, height: n)
+        let imageRect = CGRect(x: 0, y: 0, width: shot.image.width, height: shot.image.height)
+        let visible = region.intersection(imageRect)
+        guard let context = CGContext(data: nil, width: n, height: n, bitsPerComponent: 8, bytesPerRow: n * 4,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+        context.setFillColor(CGColor(gray: 0.1, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: n, height: n))
+        if !visible.isNull, let piece = shot.image.cropping(to: visible) {
+            // 위쪽 기준 오프셋을 아래쪽 기준 그리기 좌표로 바꾼다.
+            let ox = visible.minX - region.minX, oy = visible.minY - region.minY
+            context.interpolationQuality = .none
+            context.draw(piece, in: CGRect(x: ox, y: CGFloat(n) - oy - visible.height, width: visible.width, height: visible.height))
+        }
+        zoomed = context.makeImage()
+        // 메모리의 첫 줄이 위쪽이므로 가운데 픽셀은 (half, half) 자리다.
+        if let data = context.data?.assumingMemoryBound(to: UInt8.self) {
+            let offset = (half * n + half) * 4
+            let r = data[offset], g = data[offset + 1], b = data[offset + 2]
+            hex = String(format: "#%02X%02X%02X", r, g, b)
+            centerColor = NSColor(srgbRed: CGFloat(r) / 255, green: CGFloat(g) / 255, blue: CGFloat(b) / 255, alpha: 1)
+        }
+        label = "\(Int(p.x)), \(Int(p.y))   \(hex ?? "")"
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let side = Self.zoomSide
+        if let zoomed {
+            NSGraphicsContext.current?.imageInterpolation = .none
+            NSImage(cgImage: zoomed, size: NSSize(width: side, height: side))
+                .draw(in: CGRect(x: 0, y: 0, width: side, height: side), from: .zero, operation: .copy, fraction: 1,
+                      respectFlipped: true, hints: [.interpolation: NSImageInterpolation.none.rawValue])
+        }
+        // 가운데 픽셀 표시
+        let cell = side / CGFloat(Self.pixels)
+        let center = CGRect(x: cell * CGFloat(Self.pixels / 2), y: cell * CGFloat(Self.pixels / 2), width: cell, height: cell)
+        NSColor.black.setStroke()
+        NSBezierPath(rect: center.insetBy(dx: -1, dy: -1)).stroke()
+        NSColor.white.setStroke()
+        NSBezierPath(rect: center).stroke()
+
+        let info = CGRect(x: 0, y: side, width: side, height: Self.labelHeight)
+        NSColor.black.withAlphaComponent(0.8).setFill()
+        info.fill()
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium), .foregroundColor: NSColor.white,
+        ]
+        (label as NSString).draw(at: CGPoint(x: 6, y: side + 3), withAttributes: attributes)
+        let hint: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 9), .foregroundColor: NSColor.white.withAlphaComponent(0.7)]
+        (L("C 색 복사 · F 전체 화면 · 클릭 창 선택") as NSString).draw(at: CGPoint(x: 6, y: side + 18), withAttributes: hint)
+    }
+}
+
 /// 영역 테두리의 손잡이 8개. x, y는 -1(왼쪽·위), 0(가운데), 1(오른쪽·아래).
 enum Handle: CaseIterable {
     case topLeft, top, topRight, right, bottomRight, bottom, bottomLeft, left
@@ -360,6 +589,8 @@ enum Handle: CaseIterable {
         case .bottomLeft, .bottom, .bottomRight: return 1
         }
     }
+
+    var cursor: NSCursor { x == 0 ? .resizeUpDown : y == 0 ? .resizeLeftRight : .crosshair }
 
     func center(in r: CGRect) -> CGPoint {
         CGPoint(x: x < 0 ? r.minX : x > 0 ? r.maxX : r.midX, y: y < 0 ? r.minY : y > 0 ? r.maxY : r.midY)

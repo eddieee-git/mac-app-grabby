@@ -31,6 +31,20 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// 화이트보드 바탕.
+    enum BoardStyle: String, CaseIterable {
+        case white, grid, lines, dark
+
+        var title: String {
+            switch self {
+            case .white: return L("흰색")
+            case .grid: return L("모눈")
+            case .lines: return L("줄")
+            case .dark: return L("칠판")
+            }
+        }
+    }
+
     enum SaveFormat: String, CaseIterable {
         case png, jpeg
 
@@ -73,6 +87,12 @@ final class AppSettings: ObservableObject {
     @Published var captureTool: Tool { didSet { defaults.set(captureTool.key, forKey: "captureTool") } }
     @Published var whiteboardTool: Tool { didSet { defaults.set(whiteboardTool.key, forKey: "whiteboardTool") } }
 
+    /// 보관할 캡처 개수(고정한 캡처는 빼고 센다). 0이면 무제한.
+    @Published var keepCount: Int { didSet { defaults.set(keepCount, forKey: "keepCount"); CaptureStore.shared.prune() } }
+    static let keepCountOptions = [50, 100, 200, 500, 0]
+    @Published var captureSound: Bool { didSet { defaults.set(captureSound, forKey: "captureSound") } }
+    @Published var boardStyle: BoardStyle { didSet { defaults.set(boardStyle.rawValue, forKey: "boardStyle") } }
+
     static let defaultSaveFolder = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask)[0]
 
     private init() {
@@ -107,6 +127,9 @@ final class AppSettings: ObservableObject {
         rememberLastStyle = defaults.bool(forKey: "rememberLastStyle")
         captureTool = defaults.string(forKey: "captureTool").flatMap(Tool.init(key:)) ?? .select
         whiteboardTool = defaults.string(forKey: "whiteboardTool").flatMap(Tool.init(key:)) ?? .pen
+        keepCount = defaults.object(forKey: "keepCount") as? Int ?? 100
+        captureSound = defaults.object(forKey: "captureSound") as? Bool ?? true
+        boardStyle = defaults.string(forKey: "boardStyle").flatMap(BoardStyle.init) ?? .white
     }
 }
 
@@ -198,6 +221,15 @@ private struct SettingsView: View {
                         }
                     }
                 Toggle(L("탭을 삭제하기 전에 확인"), isOn: $settings.confirmDelete)
+                Picker(L("보관할 캡처 수"), selection: $settings.keepCount) {
+                    ForEach(AppSettings.keepCountOptions, id: \.self) { count in
+                        Text(count == 0 ? L("무제한") : L("%ld개", count)).tag(count)
+                    }
+                }
+                Text(L("고정(★)한 캡처는 개수에 넣지 않고 지우지 않아요."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Toggle(L("캡처할 때 소리"), isOn: $settings.captureSound)
             }
         }
         .formStyle(.grouped)
@@ -220,6 +252,11 @@ private struct SettingsView: View {
                 Picker(L("캡처할 때 시작 도구"), selection: $settings.captureTool) {
                     ForEach(Tool.allCases, id: \.self) { Text($0.name).tag($0) }
                 }
+                Picker(L("화이트보드 바탕"), selection: $settings.boardStyle) {
+                    ForEach(AppSettings.BoardStyle.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .id(settings.language)
                 Picker(L("화이트보드 시작 도구"), selection: $settings.whiteboardTool) {
                     ForEach(Tool.allCases.filter { $0 != .select }, id: \.self) { Text($0.name).tag($0) }
                 }
@@ -300,8 +337,15 @@ private struct HotKeyEditor: View {
     @State private var recording: HotKeyAction?
     @State private var monitor: Any?
     @State private var message: String?
+    @State private var runningApps = HotKeyConflicts.runningCaptureApps
 
     var body: some View {
+        if !runningApps.isEmpty {
+            Label(L("%@이(가) 켜져 있어요. 같은 단축키를 쓰면 먼저 등록한 앱이 키를 받으니, 겹치지 않게 바꿔 주세요.",
+                    runningApps.joined(separator: ", ")), systemImage: "exclamationmark.triangle.fill")
+                .font(.caption)
+                .foregroundStyle(.orange)
+        }
         ForEach(HotKeyAction.allCases, id: \.self) { action in
             LabeledContent(action.title) {
                 HStack(spacing: 8) {
@@ -334,6 +378,9 @@ private struct HotKeyEditor: View {
             }
         }
         .onDisappear(perform: stop)
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+            runningApps = HotKeyConflicts.runningCaptureApps
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in stop() }
     }
 
@@ -362,6 +409,10 @@ private struct HotKeyEditor: View {
         }
         guard let combo = KeyCombo(event: event) else {
             message = L("⌘, ⌃, ⌥ 중 하나와 함께 누르세요.")
+            return
+        }
+        if let system = HotKeyConflicts.systemShortcut(combo) {
+            message = L("%@는 macOS 스크린샷 단축키라 쓸 수 없어요.", system)
             return
         }
         if let other = HotKeyAction.allCases.first(where: { $0 != action && settings.hotKeys[$0.rawValue] == combo }) {
