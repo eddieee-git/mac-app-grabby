@@ -46,6 +46,12 @@ final class CaptureSession {
 
     fileprivate func confirm(_ overlay: OverlayView) {
         guard let canvas = overlay.canvas, let rect = overlay.selection else { return }
+        // 영역 안에서 일부를 다시 골랐으면 그 부분만 복사한다.
+        if let part = canvas.selectedImage(), let sub = canvas.selectionRect {
+            finish(CaptureResult(image: part, pixelScale: canvas.pixelScale, rect: sub.offsetBy(dx: rect.minX, dy: rect.minY),
+                                 displayID: overlay.shot.displayID, isWhiteboard: isWhiteboard))
+            return
+        }
         finish(CaptureResult(image: canvas.render(), pixelScale: canvas.pixelScale, rect: rect, displayID: overlay.shot.displayID,
                              isWhiteboard: isWhiteboard))
     }
@@ -86,7 +92,8 @@ final class OverlayWindow: NSWindow {
         let canvas = overlay.canvas
         switch Int(event.keyCode) {
         case kVK_Escape:
-            session?.cancel()
+            // 일부를 골라 둔 상태면 선택만 푼다.
+            if let canvas = overlay.canvas, canvas.selectionRect != nil { canvas.clearSelection() } else { session?.cancel() }
         case kVK_Return, kVK_ANSI_KeypadEnter:
             session?.confirm(overlay)
         case kVK_LeftArrow, kVK_RightArrow, kVK_UpArrow, kVK_DownArrow:
@@ -97,7 +104,7 @@ final class OverlayWindow: NSWindow {
             overlay.nudge(dx: dx, dy: dy, resize: event.modifierFlags.contains(.option))
         default:
             if let canvas, event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
-               let tool = Tool.forKeyCode(event.keyCode), tool != .select {
+               let tool = Tool.forKeyCode(event.keyCode) {
                 canvas.tool = tool
                 invalidateCursorRects(for: canvas)
             } else {
@@ -247,14 +254,15 @@ final class OverlayView: NSView {
         addSubview(canvas)
         self.canvas = canvas
 
-        // 화면 위 편집에서는 영역 자체가 선택이므로 부분 선택 도구는 뺀다.
-        let toolbar = EditToolbar(canvas: canvas, tools: Tool.allCases.filter { $0 != .select }, actions: [
+        // 기본 도구는 부분 선택: 영역 안에서 일부를 다시 골라 그 부분만 복사할 수 있다.
+        canvas.tool = .select
+        let toolbar = EditToolbar(canvas: canvas, tools: Tool.allCases, actions: [
             .init(symbol: "xmark", title: "취소 (Esc)") { [weak self] in self?.session?.cancel() },
             .init(symbol: "checkmark", title: "복사하고 탭에 추가 (↩ 또는 ⌘C)", label: "완료", isPrimary: true) { [weak self] in
                 guard let self else { return }
                 self.session?.confirm(self)
             },
-        ], hint: "안에 드래그해서 표시 · 손잡이·방향키로 영역 조정(⌥ 크기, ⇧ 10px) · ↩ 완료 · Esc 취소")
+        ], hint: "안에서 드래그해 일부만 고르기 · 도구로 그리기 · 손잡이·방향키로 영역 조정 · ↩/⌘C 복사 · Esc 취소")
         addSubview(toolbar)
         self.toolbar = toolbar
         let handles = HandlesView()

@@ -124,6 +124,8 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
         commitText()
         self.image = image
         pixelatedCache = nil
+        selectionRect = selectionRect.map { $0.offsetBy(dx: -shift.x, dy: -shift.y).intersection(CGRect(origin: .zero, size: imageSize)) }
+            .flatMap { $0.width >= 3 && $0.height >= 3 ? $0 : nil }
         if shift != .zero {
             annotations = annotations.map { $0.offsetBy(dx: -shift.x, dy: -shift.y) }
         }
