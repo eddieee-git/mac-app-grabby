@@ -4,12 +4,13 @@ import CoreImage
 
 /// 편집 도구. `keyCode`는 도구를 바꾸는 한 글자 단축키다(한글 입력 상태에서도 동작하도록 키 코드로 비교한다).
 enum Tool: Int, CaseIterable {
-    case arrow, rect, text, highlight, mosaic
+    case arrow, rect, pen, text, highlight, mosaic
 
     var symbol: String {
         switch self {
         case .arrow: return "arrow.up.right"
         case .rect: return "rectangle"
+        case .pen: return "scribble"
         case .text: return "textformat"
         case .highlight: return "highlighter"
         case .mosaic: return "square.grid.3x3.fill"
@@ -20,6 +21,7 @@ enum Tool: Int, CaseIterable {
         switch self {
         case .arrow: return "화살표 (A)"
         case .rect: return "네모 (R)"
+        case .pen: return "자유그리기 (P)"
         case .text: return "텍스트 (T)"
         case .highlight: return "형광펜 (H)"
         case .mosaic: return "모자이크 (M)"
@@ -30,6 +32,7 @@ enum Tool: Int, CaseIterable {
         switch Int(code) {
         case kVK_ANSI_A: return .arrow
         case kVK_ANSI_R: return .rect
+        case kVK_ANSI_P: return .pen
         case kVK_ANSI_T: return .text
         case kVK_ANSI_H: return .highlight
         case kVK_ANSI_M: return .mosaic
@@ -42,6 +45,7 @@ enum Tool: Int, CaseIterable {
 enum Annotation {
     case arrow(from: CGPoint, to: CGPoint, color: NSColor)
     case rect(CGRect, color: NSColor)
+    case pen([CGPoint], color: NSColor)
     case text(String, origin: CGPoint, color: NSColor)
     case highlight(CGRect, color: NSColor)
     case mosaic(CGRect)
@@ -53,6 +57,7 @@ extension Annotation {
         switch self {
         case let .arrow(from, to, color): return .arrow(from: move(from), to: move(to), color: color)
         case let .rect(r, color): return .rect(r.offsetBy(dx: dx, dy: dy), color: color)
+        case let .pen(points, color): return .pen(points.map(move), color: color)
         case let .text(string, origin, color): return .text(string, origin: move(origin), color: color)
         case let .highlight(r, color): return .highlight(r.offsetBy(dx: dx, dy: dy), color: color)
         case let .mosaic(r): return .mosaic(r.offsetBy(dx: dx, dy: dy))
@@ -182,6 +187,8 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
             path.lineWidth = 3
             color.setStroke()
             path.stroke()
+        case let .pen(points, color):
+            Self.drawPen(points, color: color)
         case let .text(string, origin, color):
             (string as NSString).draw(at: origin, withAttributes: Self.textAttributes(color: color, size: Self.fontSize))
         case let .highlight(rect, color):
@@ -204,6 +211,27 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
         shadow.shadowBlurRadius = 3
         shadow.shadowOffset = .zero
         return [.font: NSFont.boldSystemFont(ofSize: size), .foregroundColor: color, .shadow: shadow]
+    }
+
+    /// 점 사이를 중간점 곡선으로 이어 손떨림을 부드럽게 한다.
+    private static func drawPen(_ points: [CGPoint], color: NSColor) {
+        guard let first = points.first else { return }
+        let path = NSBezierPath()
+        path.move(to: first)
+        if points.count < 3 {
+            for p in points.dropFirst() { path.line(to: p) }
+        } else {
+            for i in 1..<points.count - 1 {
+                let mid = CGPoint(x: (points[i].x + points[i + 1].x) / 2, y: (points[i].y + points[i + 1].y) / 2)
+                path.curve(to: mid, controlPoint1: points[i], controlPoint2: points[i])
+            }
+            path.line(to: points[points.count - 1])
+        }
+        path.lineWidth = 4
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+        color.setStroke()
+        path.stroke()
     }
 
     private static func drawArrow(from a: CGPoint, to b: CGPoint, color: NSColor) {
@@ -280,11 +308,19 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
             return
         }
         dragStart = point
+        if tool == .pen { draft = .pen([point], color: color) }
     }
 
     override func mouseDragged(with event: NSEvent) {
         guard let start = dragStart else { return }
         var point = toImage(convert(event.locationInWindow, from: nil))
+        if tool == .pen {
+            if case let .pen(points, penColor) = draft, let last = points.last, hypot(point.x - last.x, point.y - last.y) >= 1 {
+                draft = .pen(points + [point], color: penColor)
+                needsDisplay = true
+            }
+            return
+        }
         if event.modifierFlags.contains(.shift) { point = Self.constrain(point, from: start, square: tool != .arrow) }
         let rect = CGRect(x: min(start.x, point.x), y: min(start.y, point.y), width: abs(point.x - start.x), height: abs(point.y - start.y))
         switch tool {
@@ -292,7 +328,7 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
         case .rect: draft = .rect(rect, color: color)
         case .highlight: draft = .highlight(rect, color: color)
         case .mosaic: draft = .mosaic(rect)
-        case .text: break
+        case .text, .pen: break
         }
         needsDisplay = true
     }
@@ -319,6 +355,7 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
         switch annotation {
         case let .arrow(from, to, _): return hypot(to.x - from.x, to.y - from.y) > 4
         case let .rect(r, _), let .highlight(r, _), let .mosaic(r): return r.width > 3 && r.height > 3
+        case let .pen(points, _): return points.count > 1
         case .text: return true
         }
     }
