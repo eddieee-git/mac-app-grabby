@@ -26,6 +26,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         _ = CaptureStore.shared
     }
 
+    /// 실행 중에 응용 프로그램 폴더에서 다시 열면 캡처 창을 보여 준다.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        openLibrary()
+        return false
+    }
+
     // MARK: 메뉴
 
     private func buildStatusItem() {
@@ -39,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item("영역 캡처", key: "1", action: #selector(captureArea)))
         menu.addItem(item("마지막 영역 다시 캡처", key: "2", action: #selector(repeatLastArea)))
         menu.addItem(.separator())
-        menu.addItem(item("보관함 열기", key: "", action: #selector(openLibrary)))
+        menu.addItem(item("캡처 창 열기", key: "", action: #selector(openLibrary)))
         menu.addItem(.separator())
         loginItem = item("로그인 시 실행", key: "", action: #selector(toggleLoginItem))
         menu.addItem(loginItem)
@@ -154,6 +160,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         UserDefaults.standard.set(NSStringFromRect(result.rect), forKey: lastRectKey)
         UserDefaults.standard.set(Int(result.displayID), forKey: lastDisplayKey)
         Toast.show("복사했어요 · ⌘V로 붙여 넣기", image: CaptureStore.shared.thumbnail(for: item))
+        if library == nil { library = LibraryWindowController() }
+        library?.showWithoutFocus()
     }
 
     private func rememberFrontApp() {
@@ -162,12 +170,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func returnToPreviousApp() {
-        if let previousApp {
-            previousApp.activate()
-        } else if library?.window?.isVisible != true {
-            NSApp.hide(nil)
+        guard let previousApp else { return }
+        self.previousApp = nil
+        previousApp.activate()
+        // 원래 앱이 앞으로 오면서 탭 창을 덮지 않도록, 포커스는 원래 앱에 둔 채 창만 다시 앞으로 올린다.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            self?.library?.showWithoutFocus()
         }
-        previousApp = nil
     }
 
     private func show(_ error: Error) {
