@@ -260,16 +260,16 @@ final class OverlayView: NSView {
         // 기본 도구는 부분 선택: 영역 안에서 일부를 다시 골라 그 부분만 복사할 수 있다.
         canvas.tool = .select
         let toolbar = EditToolbar(canvas: canvas, tools: Tool.allCases, actions: [
-            .init(symbol: "xmark", title: "취소 (Esc)") { [weak self] in self?.session?.cancel() },
-            .init(symbol: "square.and.arrow.down", title: "파일로 저장 (⌘S) · 복사하고 탭에도 추가") { [weak self] in
+            .init(symbol: "xmark", title: L("취소 (Esc)")) { [weak self] in self?.session?.cancel() },
+            .init(symbol: "square.and.arrow.down", title: L("파일로 저장 (⌘S) · 복사하고 탭에도 추가")) { [weak self] in
                 guard let self else { return }
                 self.session?.confirm(self, save: true)
             },
-            .init(symbol: "checkmark", title: "복사하고 탭에 추가 (↩ 또는 ⌘C)", label: "완료", isPrimary: true) { [weak self] in
+            .init(symbol: "checkmark", title: L("복사하고 탭에 추가 (↩ 또는 ⌘C)"), label: L("완료"), isPrimary: true) { [weak self] in
                 guard let self else { return }
                 self.session?.confirm(self)
             },
-        ], hint: "안에서 드래그해 일부만 고르기 · 도구로 그리기 · 손잡이·방향키로 영역 조정 · ↩/⌘C 복사 · ⌘S 저장 · Esc 취소")
+        ], hint: L("안에서 드래그해 일부만 고르기 · 도구로 그리기 · 손잡이·방향키로 영역 조정 · ↩/⌘C 복사 · ⌘S 저장 · Esc 취소"))
         addSubview(toolbar)
         self.toolbar = toolbar
         let handles = HandlesView()

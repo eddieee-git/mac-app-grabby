@@ -7,9 +7,9 @@ enum HotKeyAction: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .captureArea: return "영역 캡처"
-        case .repeatLastArea: return "마지막 영역 다시 캡처"
-        case .whiteboard: return "화이트보드"
+        case .captureArea: return L("영역 캡처")
+        case .repeatLastArea: return L("마지막 영역 다시 캡처")
+        case .whiteboard: return L("화이트보드")
         }
     }
 }

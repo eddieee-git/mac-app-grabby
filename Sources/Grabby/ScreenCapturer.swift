@@ -50,10 +50,10 @@ enum ScreenCapturer {
     static func requestPermission() {
         CGRequestScreenCaptureAccess()
         let alert = NSAlert()
-        alert.messageText = "화면 기록 권한이 필요해요"
-        alert.informativeText = "시스템 설정 > 개인정보 보호 및 보안 > 화면 및 시스템 오디오 기록에서 Grabby를 켠 뒤, Grabby를 다시 실행해 주세요."
-        alert.addButton(withTitle: "시스템 설정 열기")
-        alert.addButton(withTitle: "닫기")
+        alert.messageText = L("화면 기록 권한이 필요해요")
+        alert.informativeText = L("시스템 설정 > 개인정보 보호 및 보안 > 화면 및 시스템 오디오 기록에서 Grabby를 켠 뒤, Grabby를 다시 실행해 주세요.")
+        alert.addButton(withTitle: L("시스템 설정 열기"))
+        alert.addButton(withTitle: L("닫기"))
         NSApp.activate(ignoringOtherApps: true)
         if alert.runModal() == .alertFirstButtonReturn,
            let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {

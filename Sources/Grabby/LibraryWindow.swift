@@ -4,7 +4,7 @@ import AppKit
 final class LibraryWindowController: NSWindowController, NSWindowDelegate {
     private let store = CaptureStore.shared
     private let canvas = AnnotationCanvas(image: LibraryWindowController.blank, pixelScale: 1)
-    private let emptyLabel = NSTextField(labelWithString: "아직 캡처가 없어요.\n메뉴바의 영역 캡처나 단축키로 화면을 캡처해 보세요.")
+    private let emptyLabel = NSTextField(labelWithString: L("아직 캡처가 없어요.\n메뉴바의 영역 캡처나 단축키로 화면을 캡처해 보세요."))
     private let tabStrip = NSStackView()
     private let tabScroll = NSScrollView()
     private let pinButton = NSButton()
@@ -80,9 +80,9 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
 
         pinButton.bezelStyle = .texturedRounded
         pinButton.setButtonType(.toggle)
-        pinButton.image = NSImage(systemSymbolName: "pin", accessibilityDescription: "항상 위에")
-        pinButton.alternateImage = NSImage(systemSymbolName: "pin.fill", accessibilityDescription: "항상 위에")
-        pinButton.toolTip = "창을 항상 위에 두기"
+        pinButton.image = NSImage(systemSymbolName: "pin", accessibilityDescription: L("항상 위에"))
+        pinButton.alternateImage = NSImage(systemSymbolName: "pin.fill", accessibilityDescription: L("항상 위에"))
+        pinButton.toolTip = L("창을 항상 위에 두기")
         pinButton.target = self
         pinButton.action = #selector(pinToggled)
 
@@ -93,10 +93,10 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         // 탭 창에서는 기본으로 부분 선택 도구를 골라 둔다. 드래그로 고르고 ⌘C로 그 부분만 복사한다.
         canvas.tool = .select
         let toolbar = EditToolbar(canvas: canvas, tools: Tool.allCases, actions: [
-            .init(symbol: "doc.on.doc", title: "복사 (⌘C) · 고른 부분이 있으면 그 부분만") { [weak self] in self?.copyCurrent() },
-            .init(symbol: "square.and.arrow.down", title: "파일로 저장 (⌘S) · 고른 부분이 있으면 그 부분만") { [weak self] in self?.saveCurrent() },
-            .init(symbol: "folder", title: "Finder에서 보기") { [weak self] in self?.revealCurrent() },
-            .init(symbol: "trash", title: "삭제 (⌫)") { [weak self] in self?.deleteCurrent() },
+            .init(symbol: "doc.on.doc", title: L("복사 (⌘C) · 고른 부분이 있으면 그 부분만")) { [weak self] in self?.copyCurrent() },
+            .init(symbol: "square.and.arrow.down", title: L("파일로 저장 (⌘S) · 고른 부분이 있으면 그 부분만")) { [weak self] in self?.saveCurrent() },
+            .init(symbol: "folder", title: L("Finder에서 보기")) { [weak self] in self?.revealCurrent() },
+            .init(symbol: "trash", title: L("삭제 (⌫)")) { [weak self] in self?.deleteCurrent() },
         ])
 
         emptyLabel.alignment = .center
@@ -231,7 +231,7 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         guard let item = selectedItem else { return }
         if let part = canvas.selectedImage() {
             Clipboard.copy(part, scale: item.scale)
-            Toast.show("선택한 부분을 복사했어요", image: NSImage(cgImage: part, size: .zero))
+            Toast.show(L("선택한 부분을 복사했어요"), image: NSImage(cgImage: part, size: .zero))
             return
         }
         if canvas.hasEdits, item.id == shownID {
@@ -241,7 +241,7 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         }
         guard let image = store.image(for: item) else { return }
         Clipboard.copy(image, scale: item.scale)
-        Toast.show("복사했어요", image: store.thumbnail(for: item))
+        Toast.show(L("복사했어요"), image: store.thumbnail(for: item))
     }
 
     /// 지금 탭을 파일로 저장한다. 그린 표시는 합치고, 고른 부분이 있으면 그 부분만 저장한다.
@@ -263,9 +263,25 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         if let selectedID { delete(selectedID) }
     }
 
+    /// 설정에 따라 한 번 묻는다. '다시 묻지 않기'를 고르면 설정을 끈다.
+    private func confirmDelete() -> Bool {
+        let settings = AppSettings.shared
+        guard settings.confirmDelete else { return true }
+        let alert = NSAlert()
+        alert.messageText = L("이 캡처를 삭제할까요?")
+        alert.informativeText = L("삭제한 캡처는 되돌릴 수 없어요.")
+        alert.addButton(withTitle: L("삭제"))
+        alert.addButton(withTitle: L("취소"))
+        alert.showsSuppressionButton = true
+        alert.suppressionButton?.title = L("다시 묻지 않기")
+        let confirmed = alert.runModal() == .alertFirstButtonReturn
+        if confirmed, alert.suppressionButton?.state == .on { settings.confirmDelete = false }
+        return confirmed
+    }
+
     /// 탭을 지우고 오른쪽 탭(없으면 왼쪽 탭)을 고른다.
     private func delete(_ id: UUID) {
-        guard let item = store.items.first(where: { $0.id == id }) else { return }
+        guard let item = store.items.first(where: { $0.id == id }), confirmDelete() else { return }
         let index = tabs.firstIndex { $0.item.id == id } ?? 0
         let wasSelected = id == selectedID
         if wasSelected {
@@ -384,11 +400,11 @@ final class CaptureTab: NSView, NSDraggingSource {
         imageView.imageScaling = .scaleProportionallyDown
         label.font = .systemFont(ofSize: 11)
         label.lineBreakMode = .byTruncatingTail
-        closeButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "닫기")
+        closeButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: L("닫기"))
         closeButton.isBordered = false
         closeButton.imageScaling = .scaleProportionallyDown
         closeButton.contentTintColor = .secondaryLabelColor
-        closeButton.toolTip = "삭제"
+        closeButton.toolTip = L("삭제")
         closeButton.target = self
         closeButton.action = #selector(closeTapped)
 

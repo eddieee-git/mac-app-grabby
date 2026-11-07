@@ -20,13 +20,13 @@ enum Tool: Int, CaseIterable {
 
     var title: String {
         switch self {
-        case .select: return "부분 선택 (V) · ⌘C로 선택한 부분만 복사"
-        case .arrow: return "화살표 (A)"
-        case .rect: return "네모 (R)"
-        case .pen: return "자유그리기 (P)"
-        case .text: return "텍스트 (T)"
-        case .highlight: return "형광펜 (H)"
-        case .mosaic: return "모자이크 (M)"
+        case .select: return L("부분 선택 (V) · ⌘C로 선택한 부분만 복사")
+        case .arrow: return L("화살표 (A)")
+        case .rect: return L("네모 (R)")
+        case .pen: return L("자유그리기 (P)")
+        case .text: return L("텍스트 (T)")
+        case .highlight: return L("형광펜 (H)")
+        case .mosaic: return L("모자이크 (M)")
         }
     }
 

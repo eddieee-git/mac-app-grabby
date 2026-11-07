@@ -10,6 +10,34 @@ final class AppSettings: ObservableObject {
     private let hotKeysKey = "hotKeys"
     private let knownActionsKey = "knownHotKeyActions"
 
+    enum Theme: String, CaseIterable {
+        case light, dark, system
+
+        var title: String {
+            switch self {
+            case .light: return L("라이트")
+            case .dark: return L("다크")
+            case .system: return L("시스템")
+            }
+        }
+
+        /// nil이면 시스템 설정을 따른다.
+        var appearance: NSAppearance? {
+            switch self {
+            case .light: return NSAppearance(named: .aqua)
+            case .dark: return NSAppearance(named: .darkAqua)
+            case .system: return nil
+            }
+        }
+    }
+
+    enum SaveFormat: String, CaseIterable {
+        case png, jpeg
+
+        var title: String { self == .png ? "PNG" : "JPEG" }
+        var fileExtension: String { self == .png ? "png" : "jpg" }
+    }
+
     /// 전역 단축키. 키는 `HotKeyAction.rawValue`이고, 없는 동작은 단축키를 쓰지 않는다.
     @Published var hotKeys: [String: KeyCombo] {
         didSet { defaults.set(try? JSONEncoder().encode(hotKeys), forKey: hotKeysKey) }
@@ -17,6 +45,27 @@ final class AppSettings: ObservableObject {
     /// 단축키를 입력받는 동안에는 전역 단축키를 잠시 풀어 둔다.
     @Published var isRecordingHotKey = false
     @Published var failedHotKeys: Set<HotKeyAction> = []
+
+    @Published var language: AppLanguage {
+        didSet {
+            defaults.set(language.rawValue, forKey: Localization.key)
+            Localization.language = language
+        }
+    }
+    @Published var theme: Theme {
+        didSet {
+            defaults.set(theme.rawValue, forKey: "theme")
+            NSApp.appearance = theme.appearance
+        }
+    }
+    @Published var confirmDelete: Bool { didSet { defaults.set(!confirmDelete, forKey: "skipDeleteConfirmation") } }
+
+    /// 저장 창이 처음 여는 폴더이자, 바로 저장할 때 쓰는 폴더.
+    @Published var saveFolder: URL { didSet { defaults.set(saveFolder.path, forKey: "saveFolder") } }
+    @Published var saveFormat: SaveFormat { didSet { defaults.set(saveFormat.rawValue, forKey: "saveFormat") } }
+    @Published var saveWithoutPanel: Bool { didSet { defaults.set(saveWithoutPanel, forKey: "saveWithoutPanel") } }
+
+    static let defaultSaveFolder = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask)[0]
 
     private init() {
         var saved = defaults.data(forKey: hotKeysKey).flatMap { try? JSONDecoder().decode([String: KeyCombo].self, from: $0) }
@@ -33,19 +82,36 @@ final class AppSettings: ObservableObject {
         if saved[whiteboard] == KeyCombo.oldWhiteboardDefault { saved[whiteboard] = KeyCombo.defaults[whiteboard] }
         hotKeys = saved
         defaults.set(Array(known), forKey: knownActionsKey)
+
+        language = Localization.language
+        theme = defaults.string(forKey: "theme").flatMap(Theme.init) ?? .system
+        confirmDelete = !defaults.bool(forKey: "skipDeleteConfirmation")
+        // 예전 버전은 마지막으로 저장한 폴더를 기억했다. 있으면 기본 폴더로 이어받는다.
+        let folder = defaults.string(forKey: "saveFolder") ?? defaults.string(forKey: "lastSaveFolder")
+        saveFolder = folder.map { URL(fileURLWithPath: $0, isDirectory: true) } ?? Self.defaultSaveFolder
+        saveFormat = defaults.string(forKey: "saveFormat").flatMap(SaveFormat.init) ?? .png
+        saveWithoutPanel = defaults.bool(forKey: "saveWithoutPanel")
     }
 }
 
 final class SettingsWindowController {
     private var window: NSWindow?
 
+    init() {
+        NotificationCenter.default.addObserver(forName: Localization.didChange, object: nil, queue: .main) { [weak self] _ in
+            self?.window?.title = L("Grabby 설정")
+        }
+    }
+
     func show() {
         if window == nil {
-            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 260),
-                             styleMask: [.titled, .closable], backing: .buffered, defer: false)
-            w.title = "Grabby 설정"
+            let controller = NSHostingController(rootView: SettingsView(settings: .shared))
+            // 언어를 바꿔 내용 크기가 달라지면 창 크기도 따라간다.
+            controller.sizingOptions = .preferredContentSize
+            let w = NSWindow(contentViewController: controller)
+            w.styleMask = [.titled, .closable]
+            w.title = L("Grabby 설정")
             w.isReleasedWhenClosed = false
-            w.contentView = NSHostingView(rootView: SettingsView(settings: .shared))
             w.center()
             window = w
         }
@@ -60,11 +126,17 @@ private struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("단축키") {
-                HotKeyEditor(settings: settings)
-            }
-            Section("일반") {
-                Toggle("로그인 시 실행", isOn: $launchAtLogin)
+            Section(L("일반")) {
+                Picker(L("언어"), selection: $settings.language) {
+                    ForEach(AppLanguage.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                Picker(L("테마"), selection: $settings.theme) {
+                    ForEach(AppSettings.Theme.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                // 분할 버튼은 글자가 바뀌어도 다시 그리지 않아서, 언어를 바꾸면 새로 만든다.
+                .id(settings.language)
+                Toggle(L("로그인 시 실행"), isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, enabled in
                         do {
                             if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
@@ -72,11 +144,44 @@ private struct SettingsView: View {
                             launchAtLogin = SMAppService.mainApp.status == .enabled
                         }
                     }
+                Toggle(L("탭을 삭제하기 전에 확인"), isOn: $settings.confirmDelete)
+            }
+            Section(L("저장")) {
+                LabeledContent(L("기본 저장 폴더")) {
+                    HStack(spacing: 8) {
+                        Button {
+                            NSWorkspace.shared.activateFileViewerSelecting([settings.saveFolder])
+                        } label: {
+                            Label(settings.saveFolder.lastPathComponent, systemImage: "folder")
+                        }
+                        .buttonStyle(.link)
+                        .help(settings.saveFolder.path)
+                        Button(L("변경…"), action: chooseFolder)
+                    }
+                }
+                Picker(L("형식"), selection: $settings.saveFormat) {
+                    ForEach(AppSettings.SaveFormat.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                Toggle(L("저장 창 없이 기본 폴더에 바로 저장"), isOn: $settings.saveWithoutPanel)
+            }
+            Section(L("단축키")) {
+                HotKeyEditor(settings: settings)
             }
         }
         .formStyle(.grouped)
-        .frame(width: 440)
+        .frame(width: 460)
         .fixedSize()
+    }
+
+    private func chooseFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.directoryURL = settings.saveFolder
+        panel.prompt = L("폴더 선택")
+        if panel.runModal() == .OK, let url = panel.url { settings.saveFolder = url }
     }
 }
 
@@ -92,9 +197,9 @@ private struct HotKeyEditor: View {
             LabeledContent(action.title) {
                 HStack(spacing: 8) {
                     if settings.failedHotKeys.contains(action) {
-                        Text("등록하지 못함").font(.caption).foregroundStyle(.red)
+                        Text(L("등록하지 못함")).font(.caption).foregroundStyle(.red)
                     }
-                    Button(recording == action ? "키를 누르세요" : settings.hotKeys[action.rawValue]?.displayText ?? "없음") {
+                    Button(recording == action ? L("키를 누르세요") : settings.hotKeys[action.rawValue]?.displayText ?? L("없음")) {
                         recording == action ? stop() : start(action)
                     }
                     .frame(minWidth: 110)
@@ -105,16 +210,16 @@ private struct HotKeyEditor: View {
                     }
                     .buttonStyle(.borderless)
                     .disabled(settings.hotKeys[action.rawValue] == nil)
-                    .help("단축키 지우기")
+                    .help(L("단축키 지우기"))
                 }
             }
         }
         HStack {
-            Text(message ?? "다른 캡처 앱과 겹치면 먼저 등록한 앱이 키를 받아요. Esc로 입력 취소.")
+            Text(message ?? L("다른 캡처 앱과 겹치면 먼저 등록한 앱이 키를 받아요. Esc로 입력 취소."))
                 .font(.caption)
                 .foregroundStyle(message == nil ? Color.secondary : Color.red)
             Spacer()
-            Button("기본값으로") {
+            Button(L("기본값으로")) {
                 stop()
                 settings.hotKeys = KeyCombo.defaults
             }
@@ -147,11 +252,11 @@ private struct HotKeyEditor: View {
             return
         }
         guard let combo = KeyCombo(event: event) else {
-            message = "⌘, ⌃, ⌥ 중 하나와 함께 누르세요."
+            message = L("⌘, ⌃, ⌥ 중 하나와 함께 누르세요.")
             return
         }
         if let other = HotKeyAction.allCases.first(where: { $0 != action && settings.hotKeys[$0.rawValue] == combo }) {
-            message = "\(other.title)에서 쓰는 단축키예요."
+            message = L("%@에서 쓰는 단축키예요.", other.title)
             return
         }
         settings.hotKeys[action.rawValue] = combo

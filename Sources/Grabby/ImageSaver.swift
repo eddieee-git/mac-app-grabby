@@ -2,11 +2,9 @@ import AppKit
 import ImageIO
 import UniformTypeIdentifiers
 
-/// 이미지를 파일로 저장하는 창. 마지막으로 저장한 폴더를 기억한다.
+/// 이미지를 파일로 저장한다. 설정에 따라 저장 창을 띄우거나 기본 폴더에 바로 저장한다.
 @MainActor
 enum ImageSaver {
-    private static let folderKey = "lastSaveFolder"
-
     private static let nameFormatter: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
@@ -14,33 +12,55 @@ enum ImageSaver {
         return f
     }()
 
-    /// 저장 창을 띄운다. 끝나면(저장했든 취소했든) `completion`을 부른다.
+    /// 끝나면(저장했든 취소했든) `completion`을 부른다.
     static func save(_ image: CGImage, scale: CGFloat, date: Date = Date(), completion: (() -> Void)? = nil) {
+        let settings = AppSettings.shared
+        let name = "Grabby \(nameFormatter.string(from: date))"
+        let ext = settings.saveFormat.fileExtension
+
+        if settings.saveWithoutPanel {
+            try? FileManager.default.createDirectory(at: settings.saveFolder, withIntermediateDirectories: true)
+            finish(image, scale: scale, to: uniqueURL(in: settings.saveFolder, name: name, ext: ext))
+            completion?()
+            return
+        }
+
         let panel = NSSavePanel()
-        panel.title = "이미지 저장"
+        panel.title = L("이미지 저장")
         panel.allowedContentTypes = [.png, .jpeg]
-        panel.nameFieldStringValue = "Grabby \(nameFormatter.string(from: date)).png"
+        panel.nameFieldStringValue = "\(name).\(ext)"
         panel.canCreateDirectories = true
         panel.isExtensionHidden = false
-        if let path = UserDefaults.standard.string(forKey: folderKey) {
-            panel.directoryURL = URL(fileURLWithPath: path, isDirectory: true)
-        } else {
-            panel.directoryURL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
-        }
+        panel.directoryURL = settings.saveFolder
         NSApp.activate(ignoringOtherApps: true)
         panel.begin { response in
             defer { completion?() }
             guard response == .OK, let url = panel.url else { return }
-            UserDefaults.standard.set(url.deletingLastPathComponent().path, forKey: folderKey)
-            if write(image, scale: scale, to: url) {
-                Toast.show("저장했어요 · \(url.lastPathComponent)")
-            } else {
-                let alert = NSAlert()
-                alert.messageText = "저장하지 못했어요"
-                alert.informativeText = url.path
-                alert.runModal()
-            }
+            finish(image, scale: scale, to: url)
         }
+    }
+
+    private static func finish(_ image: CGImage, scale: CGFloat, to url: URL) {
+        if write(image, scale: scale, to: url) {
+            Toast.show(L("저장했어요 · %@", url.lastPathComponent))
+        } else {
+            let alert = NSAlert()
+            alert.messageText = L("저장하지 못했어요")
+            alert.informativeText = url.path
+            NSApp.activate(ignoringOtherApps: true)
+            alert.runModal()
+        }
+    }
+
+    /// 같은 이름이 있으면 " 2", " 3"을 붙인다.
+    private static func uniqueURL(in folder: URL, name: String, ext: String) -> URL {
+        var url = folder.appendingPathComponent("\(name).\(ext)")
+        var index = 2
+        while FileManager.default.fileExists(atPath: url.path) {
+            url = folder.appendingPathComponent("\(name) \(index).\(ext)")
+            index += 1
+        }
+        return url
     }
 
     /// 확장자가 jpg/jpeg면 JPEG, 나머지는 PNG로 쓴다. 해상도 정보(DPI)를 넣어 화면에서 보던 크기로 열리게 한다.

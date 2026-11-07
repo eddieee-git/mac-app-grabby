@@ -45,9 +45,9 @@ final class EditToolbar: NSVisualEffectView {
         colors.action = #selector(colorChanged)
         widths.target = self
         widths.action = #selector(widthChanged)
-        for (index, title) in ["얇게", "보통", "굵게"].enumerated() { widths.setToolTip("선 굵기: \(title)", forSegment: index) }
+        for (index, title) in [L("얇게"), L("보통"), L("굵게")].enumerated() { widths.setToolTip(L("선 굵기: %@", title), forSegment: index) }
 
-        let undo = button(symbol: "arrow.uturn.backward", title: "되돌리기 (⌘Z)", action: #selector(undoTapped))
+        let undo = button(symbol: "arrow.uturn.backward", title: L("되돌리기 (⌘Z)"), action: #selector(undoTapped))
         var views: [NSView] = [tools, colors, widths, undo]
         for (index, action) in actions.enumerated() {
             let b = button(symbol: action.symbol, title: action.title, action: #selector(actionTapped(_:)))

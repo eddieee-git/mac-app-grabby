@@ -19,8 +19,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let lastDisplayKey = "lastCaptureDisplay"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.appearance = settings.theme.appearance
         buildMainMenu()
         buildStatusItem()
+        // 언어를 바꾸면 메뉴를 다시 만들고, 탭 창은 새 언어로 다시 연다.
+        NotificationCenter.default.addObserver(forName: Localization.didChange, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.languageChanged() }
+        }
         // 설정에서 단축키를 바꾸면 바로 다시 등록한다. 입력받는 동안에는 잠시 풀어 둔다.
         hotKeySubscription = settings.$hotKeys.combineLatest(settings.$isRecordingHotKey).sink { [weak self] combos, isRecording in
             self?.registerHotKeys(isRecording ? [:] : combos)
@@ -67,12 +72,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: 메뉴
 
+    private func languageChanged() {
+        buildMainMenu()
+        buildStatusMenu()
+        updateHotKeyItems(settings.hotKeys)
+        guard let old = library else { return }
+        let wasVisible = old.isVisible
+        old.close()
+        library = nil
+        if wasVisible { openLibrary() }
+    }
+
     private func buildStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         let image = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "Grabby")
         image?.isTemplate = true
         statusItem.button?.image = image
+        buildStatusMenu()
+    }
 
+    private func buildStatusMenu() {
         let menu = NSMenu()
         let capture = item(HotKeyAction.captureArea.title, action: #selector(captureArea))
         let repeatLast = item(HotKeyAction.repeatLastArea.title, action: #selector(repeatLastArea))
@@ -82,14 +101,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(repeatLast)
         menu.addItem(whiteboard)
         menu.addItem(.separator())
-        menu.addItem(item("캡처 창 열기", action: #selector(openLibrary)))
+        menu.addItem(item(L("캡처 창 열기"), action: #selector(openLibrary)))
         menu.addItem(.separator())
-        let settingsItem = item("설정…", action: #selector(openSettings))
+        let settingsItem = item(L("설정…"), action: #selector(openSettings))
         settingsItem.keyEquivalent = ","
         settingsItem.keyEquivalentModifierMask = .command
         menu.addItem(settingsItem)
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Grabby 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: L("Grabby 종료"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
     }
 
@@ -104,20 +123,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let main = NSMenu()
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(NSMenuItem(title: "Grabby 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        appMenu.addItem(NSMenuItem(title: L("Grabby 종료"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         appItem.submenu = appMenu
         main.addItem(appItem)
 
         let editItem = NSMenuItem()
-        let edit = NSMenu(title: "편집")
-        edit.addItem(NSMenuItem(title: "실행 취소", action: Selector(("undo:")), keyEquivalent: "z"))
+        let edit = NSMenu(title: L("편집"))
+        edit.addItem(NSMenuItem(title: L("실행 취소"), action: Selector(("undo:")), keyEquivalent: "z"))
         edit.addItem(.separator())
-        edit.addItem(NSMenuItem(title: "오려두기", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
-        edit.addItem(NSMenuItem(title: "복사", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
-        edit.addItem(NSMenuItem(title: "붙이기", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
-        edit.addItem(NSMenuItem(title: "전체 선택", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
-        edit.addItem(NSMenuItem(title: "창 닫기", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"))
-        edit.addItem(NSMenuItem(title: "저장…", action: #selector(NSDocument.save(_:)), keyEquivalent: "s"))
+        edit.addItem(NSMenuItem(title: L("오려두기"), action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        edit.addItem(NSMenuItem(title: L("복사"), action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        edit.addItem(NSMenuItem(title: L("붙이기"), action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        edit.addItem(NSMenuItem(title: L("전체 선택"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        edit.addItem(NSMenuItem(title: L("창 닫기"), action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"))
+        edit.addItem(NSMenuItem(title: L("저장…"), action: #selector(NSDocument.save(_:)), keyEquivalent: "s"))
         editItem.submenu = edit
         main.addItem(editItem)
         NSApp.mainMenu = main
@@ -203,7 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             UserDefaults.standard.set(NSStringFromRect(result.rect), forKey: lastRectKey)
             UserDefaults.standard.set(Int(result.displayID), forKey: lastDisplayKey)
         }
-        Toast.show("복사했어요 · ⌘V로 붙여 넣기", image: CaptureStore.shared.thumbnail(for: item))
+        Toast.show(L("복사했어요 · ⌘V로 붙여 넣기"), image: CaptureStore.shared.thumbnail(for: item))
         if library == nil { library = LibraryWindowController() }
         library?.showWithoutFocus()
     }
@@ -236,7 +255,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func show(_ error: Error) {
         let alert = NSAlert()
-        alert.messageText = "캡처하지 못했어요"
+        alert.messageText = L("캡처하지 못했어요")
         alert.informativeText = error.localizedDescription
         NSApp.activate(ignoringOtherApps: true)
         alert.runModal()
