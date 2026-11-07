@@ -112,6 +112,7 @@ enum Localization {
         "형광펜": "Highlighter",
         "모자이크": "Pixelate",
         "Grabby 설정": "Grabby Settings",
+        "설정": "Settings",
         "일반": "General",
         "언어": "Language",
         "테마": "Theme",

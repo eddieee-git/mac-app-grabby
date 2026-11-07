@@ -137,12 +137,49 @@ final class SettingsWindowController {
 }
 
 private struct SettingsView: View {
+    enum Tab: CaseIterable {
+        case general, editing, saving, shortcuts
+
+        var title: String {
+            switch self {
+            case .general: return L("일반")
+            case .editing: return L("편집")
+            case .saving: return L("저장")
+            case .shortcuts: return L("단축키")
+            }
+        }
+    }
+
     @ObservedObject var settings: AppSettings
+    @State private var tab: Tab = .general
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
+        VStack(spacing: 0) {
+            Picker(L("설정"), selection: $tab) {
+                ForEach(Tab.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            // 분할 버튼은 글자가 바뀌어도 다시 그리지 않아서, 언어를 바꾸면 새로 만든다.
+            .id(settings.language)
+            .padding(.top, 12)
+
+            switch tab {
+            case .general: general
+            case .editing: editing
+            case .saving: saving
+            case .shortcuts: shortcuts
+            }
+        }
+        .frame(width: 460)
+        .fixedSize()
+    }
+
+    private var general: some View {
         Form {
-            Section(L("일반")) {
+            Section {
                 Picker(L("언어"), selection: $settings.language) {
                     ForEach(AppLanguage.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
@@ -162,7 +199,13 @@ private struct SettingsView: View {
                     }
                 Toggle(L("탭을 삭제하기 전에 확인"), isOn: $settings.confirmDelete)
             }
-            Section(L("편집")) {
+        }
+        .formStyle(.grouped)
+    }
+
+    private var editing: some View {
+        Form {
+            Section {
                 LabeledContent(L("기본 색")) {
                     ColorSwatches(selection: $settings.defaultColorIndex)
                 }
@@ -181,7 +224,13 @@ private struct SettingsView: View {
                     ForEach(Tool.allCases.filter { $0 != .select }, id: \.self) { Text($0.name).tag($0) }
                 }
             }
-            Section(L("저장")) {
+        }
+        .formStyle(.grouped)
+    }
+
+    private var saving: some View {
+        Form {
+            Section {
                 LabeledContent(L("기본 저장 폴더")) {
                     HStack(spacing: 8) {
                         Button {
@@ -200,14 +249,19 @@ private struct SettingsView: View {
                 .pickerStyle(.segmented)
                 Toggle(L("저장 창 없이 기본 폴더에 바로 저장"), isOn: $settings.saveWithoutPanel)
             }
-            Section(L("단축키")) {
+        }
+        .formStyle(.grouped)
+    }
+
+    private var shortcuts: some View {
+        Form {
+            Section {
                 HotKeyEditor(settings: settings)
             }
         }
         .formStyle(.grouped)
-        .frame(width: 460)
-        .fixedSize()
     }
+
 
     private func chooseFolder() {
         let panel = NSOpenPanel()
