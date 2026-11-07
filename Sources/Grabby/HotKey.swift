@@ -26,9 +26,13 @@ struct KeyCombo: Codable, Equatable {
         return [
             HotKeyAction.captureArea.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_1), modifiers: controlCommand, key: "1"),
             HotKeyAction.repeatLastArea.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_2), modifiers: controlCommand, key: "2"),
-            HotKeyAction.whiteboard.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_3), modifiers: controlCommand, key: "3"),
+            // 한국어 자판에서 ₩가 찍히는 키(ANSI 자판의 `)
+            HotKeyAction.whiteboard.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_Grave), modifiers: controlCommand, key: "`"),
         ]
     }()
+
+    /// 화이트보드 기본값이 ⌃⌘3이던 때 저장된 값.
+    static let oldWhiteboardDefault = KeyCombo(keyCode: UInt32(kVK_ANSI_3), modifiers: UInt32(controlKey | cmdKey), key: "3")
 
     private static let specialKeys: [Int: String] = [
         kVK_Space: "Space", kVK_Return: "↩", kVK_Tab: "⇥", kVK_Delete: "⌫", kVK_ForwardDelete: "⌦",
@@ -76,10 +80,11 @@ struct KeyCombo: Codable, Equatable {
         return String(utf16CodeUnits: chars, count: length).uppercased()
     }
 
+    /// 한국어 자판에서 쓰므로 ` 키는 자판에 적힌 대로 ₩로 보여 준다.
     var displayText: String {
         let mods = Int(modifiers)
         return (mods & controlKey != 0 ? "⌃" : "") + (mods & optionKey != 0 ? "⌥" : "")
-            + (mods & shiftKey != 0 ? "⇧" : "") + (mods & cmdKey != 0 ? "⌘" : "") + key
+            + (mods & shiftKey != 0 ? "⇧" : "") + (mods & cmdKey != 0 ? "⌘" : "") + (key == "`" ? "₩" : key)
     }
 
     /// 메뉴 항목에 표시할 키. 특수 키는 메뉴에 그대로 쓸 수 없어 표시하지 않는다.

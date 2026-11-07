@@ -28,6 +28,9 @@ final class AppSettings: ObservableObject {
                !saved.values.contains(combo) { saved[action.rawValue] = combo }
             known.insert(action.rawValue)
         }
+        // 화이트보드 기본값을 ⌃⌘3에서 ⌃⌘₩로 바꿨다. 예전 기본값 그대로면 새 기본값으로 옮긴다.
+        let whiteboard = HotKeyAction.whiteboard.rawValue
+        if saved[whiteboard] == KeyCombo.oldWhiteboardDefault { saved[whiteboard] = KeyCombo.defaults[whiteboard] }
         hotKeys = saved
         defaults.set(Array(known), forKey: knownActionsKey)
     }
