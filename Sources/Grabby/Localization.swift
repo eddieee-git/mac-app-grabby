@@ -99,6 +99,18 @@ enum Localization {
         "이미지 저장": "Save Image",
 
         // 설정
+        "기본 색": "Default Color",
+        "기본 선 굵기": "Default Line Width",
+        "마지막에 쓴 색과 굵기를 기본값으로 기억": "Remember the last used color and width",
+        "캡처할 때 시작 도구": "Starting Tool for Captures",
+        "화이트보드 시작 도구": "Starting Tool for Whiteboard",
+        "부분 선택": "Select Part",
+        "화살표": "Arrow",
+        "네모": "Rectangle",
+        "자유그리기": "Pen",
+        "텍스트": "Text",
+        "형광펜": "Highlighter",
+        "모자이크": "Pixelate",
         "Grabby 설정": "Grabby Settings",
         "일반": "General",
         "언어": "Language",

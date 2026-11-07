@@ -65,6 +65,14 @@ final class AppSettings: ObservableObject {
     @Published var saveFormat: SaveFormat { didSet { defaults.set(saveFormat.rawValue, forKey: "saveFormat") } }
     @Published var saveWithoutPanel: Bool { didSet { defaults.set(saveWithoutPanel, forKey: "saveWithoutPanel") } }
 
+    /// 편집 기본값. 색과 굵기는 `AnnotationCanvas.palette`, `lineWidths`의 번호다.
+    @Published var defaultColorIndex: Int { didSet { defaults.set(defaultColorIndex, forKey: "defaultColorIndex") } }
+    @Published var defaultWidthIndex: Int { didSet { defaults.set(defaultWidthIndex, forKey: "defaultWidthIndex") } }
+    /// 켜면 도구 막대에서 바꾼 색과 굵기가 다음 기본값이 된다.
+    @Published var rememberLastStyle: Bool { didSet { defaults.set(rememberLastStyle, forKey: "rememberLastStyle") } }
+    @Published var captureTool: Tool { didSet { defaults.set(captureTool.key, forKey: "captureTool") } }
+    @Published var whiteboardTool: Tool { didSet { defaults.set(whiteboardTool.key, forKey: "whiteboardTool") } }
+
     static let defaultSaveFolder = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask)[0]
 
     private init() {
@@ -91,6 +99,14 @@ final class AppSettings: ObservableObject {
         saveFolder = folder.map { URL(fileURLWithPath: $0, isDirectory: true) } ?? Self.defaultSaveFolder
         saveFormat = defaults.string(forKey: "saveFormat").flatMap(SaveFormat.init) ?? .png
         saveWithoutPanel = defaults.bool(forKey: "saveWithoutPanel")
+
+        let colorIndex = defaults.object(forKey: "defaultColorIndex") as? Int ?? 0
+        defaultColorIndex = AnnotationCanvas.palette.indices.contains(colorIndex) ? colorIndex : 0
+        let widthIndex = defaults.object(forKey: "defaultWidthIndex") as? Int ?? 1
+        defaultWidthIndex = AnnotationCanvas.lineWidths.indices.contains(widthIndex) ? widthIndex : 1
+        rememberLastStyle = defaults.bool(forKey: "rememberLastStyle")
+        captureTool = defaults.string(forKey: "captureTool").flatMap(Tool.init(key:)) ?? .select
+        whiteboardTool = defaults.string(forKey: "whiteboardTool").flatMap(Tool.init(key:)) ?? .pen
     }
 }
 
@@ -146,6 +162,25 @@ private struct SettingsView: View {
                     }
                 Toggle(L("탭을 삭제하기 전에 확인"), isOn: $settings.confirmDelete)
             }
+            Section(L("편집")) {
+                LabeledContent(L("기본 색")) {
+                    ColorSwatches(selection: $settings.defaultColorIndex)
+                }
+                Picker(L("기본 선 굵기"), selection: $settings.defaultWidthIndex) {
+                    Text(L("얇게")).tag(0)
+                    Text(L("보통")).tag(1)
+                    Text(L("굵게")).tag(2)
+                }
+                .pickerStyle(.segmented)
+                .id(settings.language)
+                Toggle(L("마지막에 쓴 색과 굵기를 기본값으로 기억"), isOn: $settings.rememberLastStyle)
+                Picker(L("캡처할 때 시작 도구"), selection: $settings.captureTool) {
+                    ForEach(Tool.allCases, id: \.self) { Text($0.name).tag($0) }
+                }
+                Picker(L("화이트보드 시작 도구"), selection: $settings.whiteboardTool) {
+                    ForEach(Tool.allCases.filter { $0 != .select }, id: \.self) { Text($0.name).tag($0) }
+                }
+            }
             Section(L("저장")) {
                 LabeledContent(L("기본 저장 폴더")) {
                     HStack(spacing: 8) {
@@ -182,6 +217,26 @@ private struct SettingsView: View {
         panel.directoryURL = settings.saveFolder
         panel.prompt = L("폴더 선택")
         if panel.runModal() == .OK, let url = panel.url { settings.saveFolder = url }
+    }
+}
+
+/// 편집 색 팔레트에서 하나를 고른다.
+private struct ColorSwatches: View {
+    @Binding var selection: Int
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(AnnotationCanvas.palette.indices, id: \.self) { index in
+                Circle()
+                    .fill(Color(nsColor: AnnotationCanvas.palette[index]))
+                    .overlay(Circle().stroke(Color.gray.opacity(0.6), lineWidth: 1))
+                    .frame(width: 18, height: 18)
+                    .padding(3)
+                    .overlay(Circle().stroke(Color.accentColor, lineWidth: 2).opacity(selection == index ? 1 : 0))
+                    .contentShape(Circle())
+                    .onTapGesture { selection = index }
+            }
+        }
     }
 }
 

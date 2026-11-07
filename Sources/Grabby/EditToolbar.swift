@@ -116,11 +116,17 @@ final class EditToolbar: NSVisualEffectView {
     }
 
     @objc private func colorChanged() {
-        canvas.color = AnnotationCanvas.palette[max(0, colors.selectedSegment)]
+        let index = max(0, colors.selectedSegment)
+        canvas.color = AnnotationCanvas.palette[index]
+        let settings = AppSettings.shared
+        if settings.rememberLastStyle { settings.defaultColorIndex = index }
     }
 
     @objc private func widthChanged() {
-        canvas.lineWidth = AnnotationCanvas.lineWidths[max(0, widths.selectedSegment)]
+        let index = max(0, widths.selectedSegment)
+        canvas.lineWidth = AnnotationCanvas.lineWidths[index]
+        let settings = AppSettings.shared
+        if settings.rememberLastStyle { settings.defaultWidthIndex = index }
     }
 
     @objc private func undoTapped() { canvas.undo() }

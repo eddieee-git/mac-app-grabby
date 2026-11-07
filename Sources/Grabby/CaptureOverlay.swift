@@ -36,7 +36,7 @@ final class CaptureSession {
             let size = overlay.bounds.size
             let board = CGSize(width: min(1200, size.width * 0.8), height: min(800, size.height * 0.75))
             overlay.preselect(CGRect(x: (size.width - board.width) / 2, y: (size.height - board.height) / 2,
-                                     width: board.width, height: board.height), tool: .pen)
+                                     width: board.width, height: board.height), tool: AppSettings.shared.whiteboardTool)
         }
     }
 
@@ -258,7 +258,7 @@ final class OverlayView: NSView {
         self.canvas = canvas
 
         // 기본 도구는 부분 선택: 영역 안에서 일부를 다시 골라 그 부분만 복사할 수 있다.
-        canvas.tool = .select
+        canvas.tool = AppSettings.shared.captureTool
         let toolbar = EditToolbar(canvas: canvas, tools: Tool.allCases, actions: [
             .init(symbol: "xmark", title: L("취소 (Esc)")) { [weak self] in self?.session?.cancel() },
             .init(symbol: "square.and.arrow.down", title: L("파일로 저장 (⌘S) · 복사하고 탭에도 추가")) { [weak self] in

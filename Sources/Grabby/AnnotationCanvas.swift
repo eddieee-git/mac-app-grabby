@@ -30,6 +30,37 @@ enum Tool: Int, CaseIterable {
         }
     }
 
+    /// 설정 화면에 보여 줄 짧은 이름.
+    var name: String {
+        switch self {
+        case .select: return L("부분 선택")
+        case .arrow: return L("화살표")
+        case .rect: return L("네모")
+        case .pen: return L("자유그리기")
+        case .text: return L("텍스트")
+        case .highlight: return L("형광펜")
+        case .mosaic: return L("모자이크")
+        }
+    }
+
+    /// 설정에 저장할 때 쓰는 이름. 순서를 바꿔도 값이 바뀌지 않게 따로 둔다.
+    var key: String {
+        switch self {
+        case .select: return "select"
+        case .arrow: return "arrow"
+        case .rect: return "rect"
+        case .pen: return "pen"
+        case .text: return "text"
+        case .highlight: return "highlight"
+        case .mosaic: return "mosaic"
+        }
+    }
+
+    init?(key: String) {
+        guard let tool = Tool.allCases.first(where: { $0.key == key }) else { return nil }
+        self = tool
+    }
+
     static func forKeyCode(_ code: UInt16) -> Tool? {
         switch Int(code) {
         case kVK_ANSI_V: return .select
@@ -81,8 +112,9 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
     private(set) var annotations: [Annotation] = [] { didSet { onChange?() } }
 
     var tool: Tool = .arrow { didSet { commitText(); onToolChange?() } }
-    var color: NSColor = AnnotationCanvas.palette[0] { didSet { onToolChange?() } }
-    var lineWidth: CGFloat = AnnotationCanvas.lineWidths[1] { didSet { onToolChange?() } }
+    /// 처음 색과 굵기는 설정의 기본값을 따른다.
+    var color: NSColor = AnnotationCanvas.palette[AppSettings.shared.defaultColorIndex] { didSet { onToolChange?() } }
+    var lineWidth: CGFloat = AnnotationCanvas.lineWidths[AppSettings.shared.defaultWidthIndex] { didSet { onToolChange?() } }
     var onChange: (() -> Void)?
     var onToolChange: (() -> Void)?
 
