@@ -52,7 +52,7 @@ final class CaptureSession {
         case .area:
             overlay.pointerMoved(to: overlay.convert(active!.convertPoint(fromScreen: mouse), from: nil))
         case .fullScreen:
-            overlay.preselect(overlay.bounds, tool: AppSettings.shared.captureTool)
+            overlay.presentFullScreen()
         case .whiteboard:
             let size = overlay.bounds.size
             let board = CGSize(width: min(1200, size.width * 0.8), height: min(800, size.height * 0.75))
@@ -143,7 +143,7 @@ final class OverlayWindow: NSPanel {
             overlay.copyColorUnderPointer()
             session?.cancel()
         case kVK_ANSI_F where canvas == nil && plain:
-            overlay.preselect(overlay.bounds, tool: AppSettings.shared.captureTool)
+            overlay.presentFullScreen()
         default:
             if let canvas, plain, let tool = Tool.forKeyCode(event.keyCode) {
                 canvas.tool = tool
@@ -188,6 +188,8 @@ final class OverlayView: NSView {
     private var hoveredWindow: CGRect?
     private var windowRects: [CGRect] = []
     private let loupe = LoupeView()
+    /// 전체 화면 캡처: 화면 전체를 조금 줄여 가운데에 보여 준다. 영역 손잡이는 쓰지 않는다.
+    private var isPreview = false
 
     init(shot: ScreenShot, blank: Bool) {
         self.shot = shot
@@ -217,20 +219,24 @@ final class OverlayView: NSView {
         resizing = nil
         selection = nil
         dragStart = nil
+        isPreview = false
         needsDisplay = true
         window?.invalidateCursorRects(for: self)
     }
 
+    /// 손잡이를 쓸 수 있는 영역(전체 화면 미리 보기에서는 없다).
+    private var handleRect: CGRect? { isPreview ? nil : selection }
+
     /// 영역을 고르는 동안은 십자, 편집 중에는 영역 밖에서 일반 화살표를 보여 준다(영역 안은 캔버스가 정한다).
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: canvas == nil ? .crosshair : .arrow)
-        guard canvas != nil, let selection else { return }
+        guard canvas != nil, let selection = handleRect else { return }
         for handle in Handle.allCases { addCursorRect(handle.hitRect(in: selection), cursor: handle.cursor) }
     }
 
     /// 손잡이는 캔버스 위에 걸쳐 있으므로 캔버스보다 먼저 클릭을 받는다.
     override func hitTest(_ point: NSPoint) -> NSView? {
-        if canvas != nil, let selection, let superview {
+        if canvas != nil, let selection = handleRect, let superview {
             let p = convert(point, from: superview)
             if Handle.allCases.contains(where: { $0.hitRect(in: selection).contains(p) }) { return self }
         }
@@ -242,6 +248,12 @@ final class OverlayView: NSView {
         NSImage(cgImage: shot.image, size: bounds.size)
             .draw(in: bounds, from: .zero, operation: .copy, fraction: 1, respectFlipped: true, hints: nil)
 
+        // 전체 화면 미리 보기는 바탕을 더 어둡게 해서 줄인 화면이 눈에 띄게 한다.
+        if isPreview {
+            NSColor.black.withAlphaComponent(0.6).setFill()
+            bounds.fill(using: .sourceOver)
+            return
+        }
         // 아직 고르기 전이면 마우스 아래 창을 밝게 보여 준다.
         let hole = selection ?? (dragStart == nil ? hoveredWindow : nil)
         let dim = NSBezierPath(rect: bounds)
@@ -291,7 +303,7 @@ final class OverlayView: NSView {
 
     /// 앱이 앞에 있지 않으면 커서 영역이 동작하지 않을 수 있어 직접 커서를 정한다.
     func pointerMoved(to p: CGPoint) {
-        guard let canvas, let selection else {
+        guard let canvas else {
             NSCursor.crosshair.set()
             showLoupe(at: p)
             let window = dragStart == nil ? windowRects.first { $0.contains(p) } : nil
@@ -302,7 +314,7 @@ final class OverlayView: NSView {
             return
         }
         loupe.isHidden = true
-        if let handle = Handle.allCases.first(where: { $0.hitRect(in: selection).contains(p) }) {
+        if let selection = handleRect, let handle = Handle.allCases.first(where: { $0.hitRect(in: selection).contains(p) }) {
             handle.cursor.set()
         } else if canvas.frame.contains(p), toolbar?.frame.contains(p) != true {
             (canvas.tool == .text ? NSCursor.iBeam : NSCursor.crosshair).set()
@@ -332,7 +344,7 @@ final class OverlayView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         let p = convert(event.locationInWindow, from: nil)
-        if canvas != nil, let selection, let handle = Handle.allCases.first(where: { $0.hitRect(in: selection).contains(p) }) {
+        if canvas != nil, let selection = handleRect, let handle = Handle.allCases.first(where: { $0.hitRect(in: selection).contains(p) }) {
             resizing = handle
             return
         }
@@ -378,12 +390,13 @@ final class OverlayView: NSView {
         reset()
     }
 
-    private func beginEditing(_ rect: CGRect) {
+    /// `frame`을 주면 캔버스를 그 자리에 놓는다(전체 화면 미리 보기). 없으면 고른 영역 그대로.
+    private func beginEditing(_ rect: CGRect, frame: CGRect? = nil) {
         guard let image = content(for: rect) else { reset(); return }
         loupe.isHidden = true
         hoveredWindow = nil
         let canvas = AnnotationCanvas(image: image, pixelScale: shot.scale)
-        canvas.frame = rect
+        canvas.frame = frame ?? rect
         addSubview(canvas, positioned: .below, relativeTo: loupe)
         self.canvas = canvas
 
@@ -409,9 +422,11 @@ final class OverlayView: NSView {
         ], hint: L("안에서 드래그해 일부만 고르기 · 그린 표시는 눌러서 옮기기·⌫ 지우기 · 손잡이·방향키로 영역 조정 · ↩/⌘C 복사 · Esc 취소"))
         addSubview(toolbar, positioned: .below, relativeTo: loupe)
         self.toolbar = toolbar
-        let handles = HandlesView()
-        addSubview(handles, positioned: .below, relativeTo: loupe)
-        self.handles = handles
+        if !isPreview {
+            let handles = HandlesView()
+            addSubview(handles, positioned: .below, relativeTo: loupe)
+            self.handles = handles
+        }
         layoutChrome()
         window?.makeFirstResponder(self)
         window?.invalidateCursorRects(for: self)
@@ -425,7 +440,28 @@ final class OverlayView: NSView {
                                 height: Int(rect.height * shot.scale), scale: shot.scale)
     }
 
-    /// 영역을 미리 고른 채 편집을 시작한다(화이트보드, 전체 화면).
+    /// 전체 화면을 고르되, 화면 전체를 조금 줄여 가운데에 보여 주고 그 위에서 편집한다.
+    /// 아래쪽에는 도구 막대 자리를 남긴다.
+    func presentFullScreen() {
+        reset()
+        let available = CGRect(x: 48, y: 40, width: bounds.width - 96, height: bounds.height - 40 - 120)
+        let scale = min(available.width / bounds.width, available.height / bounds.height, 0.9)
+        let size = CGSize(width: (bounds.width * scale).rounded(), height: (bounds.height * scale).rounded())
+        let frame = CGRect(x: ((bounds.width - size.width) / 2).rounded(), y: available.minY + ((available.height - size.height) / 2).rounded(),
+                           width: size.width, height: size.height)
+        isPreview = true
+        selection = bounds
+        beginEditing(bounds, frame: frame)
+        canvas?.wantsLayer = true
+        canvas?.shadow = {
+            let shadow = NSShadow()
+            shadow.shadowBlurRadius = 24
+            shadow.shadowColor = NSColor.black.withAlphaComponent(0.6)
+            return shadow
+        }()
+    }
+
+    /// 영역을 미리 고른 채 편집을 시작한다(화이트보드).
     func preselect(_ rect: CGRect, tool: Tool) {
         reset()
         let rect = rect.intersection(bounds).integral
@@ -450,7 +486,7 @@ final class OverlayView: NSView {
 
     /// 방향키: 영역을 옮긴다. ⌥를 누르면 오른쪽·아래 변을 움직여 크기를 바꾼다.
     func nudge(dx: CGFloat, dy: CGFloat, resize: Bool) {
-        guard canvas != nil, let selection else { return }
+        guard canvas != nil, let selection = handleRect else { return }
         if resize {
             applySelection(CGRect(x: selection.minX, y: selection.minY, width: selection.width + dx, height: selection.height + dy))
         } else {
@@ -463,7 +499,7 @@ final class OverlayView: NSView {
 
     /// 손잡이와 도구 막대를 영역에 맞춰 놓는다.
     private func layoutChrome() {
-        guard let rect = selection else { return }
+        guard let rect = isPreview ? canvas?.frame : selection else { return }
         handles?.frame = rect.insetBy(dx: -Handle.size, dy: -Handle.size)
         handles?.needsDisplay = true
         guard let toolbar else { return }
