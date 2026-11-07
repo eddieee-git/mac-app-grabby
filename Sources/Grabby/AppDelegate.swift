@@ -18,10 +18,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMainMenu()
         buildStatusItem()
-        let controlCommand = controlKey | cmdKey
+        let commandShift = cmdKey | shiftKey
         hotKeys = [
-            HotKey(id: 1, keyCode: kVK_ANSI_1, modifiers: controlCommand) { [weak self] in MainActor.assumeIsolated { self?.captureArea() } },
-            HotKey(id: 2, keyCode: kVK_ANSI_2, modifiers: controlCommand) { [weak self] in MainActor.assumeIsolated { self?.repeatLastArea() } },
+            HotKey(id: 1, keyCode: kVK_ANSI_1, modifiers: commandShift) { [weak self] in MainActor.assumeIsolated { self?.captureArea() } },
+            HotKey(id: 2, keyCode: kVK_ANSI_2, modifiers: commandShift) { [weak self] in MainActor.assumeIsolated { self?.repeatLastArea() } },
         ].compactMap { $0 }
         _ = CaptureStore.shared
     }
@@ -50,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func item(_ title: String, key: String, action: Selector) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
-        item.keyEquivalentModifierMask = [.control, .command]
+        item.keyEquivalentModifierMask = [.command, .shift]
         item.target = self
         return item
     }

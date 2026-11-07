@@ -5,7 +5,7 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate, NSTab
     private let store = CaptureStore.shared
     private let table = NSTableView()
     private let canvas = AnnotationCanvas(image: LibraryWindowController.blank, pixelScale: 1)
-    private let emptyLabel = NSTextField(labelWithString: "아직 캡처가 없어요.\n⌃⌘1로 화면을 캡처해 보세요.")
+    private let emptyLabel = NSTextField(labelWithString: "아직 캡처가 없어요.\n⌘⇧1로 화면을 캡처해 보세요.")
     private var shown: CaptureItem?
     private var knownNewest: UUID?
     private var isPersisting = false
