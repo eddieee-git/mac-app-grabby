@@ -18,12 +18,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMainMenu()
         buildStatusItem()
-        let commandShift = cmdKey | shiftKey
-        hotKeys = [
-            HotKey(id: 1, keyCode: kVK_ANSI_1, modifiers: commandShift) { [weak self] in MainActor.assumeIsolated { self?.captureArea() } },
-            HotKey(id: 2, keyCode: kVK_ANSI_2, modifiers: commandShift) { [weak self] in MainActor.assumeIsolated { self?.repeatLastArea() } },
-        ].compactMap { $0 }
+        registerHotKeys()
         _ = CaptureStore.shared
+    }
+
+    /// 다른 앱(예: Shottr)이 같은 조합을 먼저 차지하면 등록이 실패한다. 그때는 알려 준다.
+    private func registerHotKeys() {
+        let commandShift = cmdKey | shiftKey
+        var failed: [String] = []
+        let capture = HotKey(id: 1, keyCode: kVK_ANSI_1, modifiers: commandShift) { [weak self] in
+            MainActor.assumeIsolated { self?.captureArea() }
+        }
+        if capture == nil { failed.append("⌘⇧1 (영역 캡처)") }
+        let repeatLast = HotKey(id: 2, keyCode: kVK_ANSI_2, modifiers: commandShift) { [weak self] in
+            MainActor.assumeIsolated { self?.repeatLastArea() }
+        }
+        if repeatLast == nil { failed.append("⌘⇧2 (마지막 영역 다시 캡처)") }
+        hotKeys = [capture, repeatLast].compactMap { $0 }
+        guard !failed.isEmpty else { return }
+
+        let alert = NSAlert()
+        alert.messageText = "단축키를 등록하지 못했어요"
+        alert.informativeText = "다른 앱이 이미 쓰고 있는 단축키예요: \(failed.joined(separator: ", ")).\n"
+            + "Shottr 같은 캡처 앱을 끄거나 그 앱의 단축키를 바꾼 뒤 Grabby를 다시 실행해 주세요. 그동안은 메뉴바에서 캡처할 수 있어요."
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
     }
 
     /// 실행 중에 응용 프로그램 폴더에서 다시 열면 캡처 창을 보여 준다.
