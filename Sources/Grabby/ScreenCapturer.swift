@@ -19,17 +19,20 @@ struct ScreenShot {
 }
 
 extension ScreenShot {
-    /// 화면 크기만 한 흰 바탕. 화이트보드에 쓴다.
+    /// 화면 크기만 한 흰 바탕. 화면 기록 권한이 없을 때 화이트보드 바깥 배경으로 쓴다.
     static func whiteboard(on screen: NSScreen) -> ScreenShot? {
         let scale = screen.backingScaleFactor
-        let width = Int(screen.frame.width * scale), height = Int(screen.frame.height * scale)
-        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+        guard let image = white(width: Int(screen.frame.width * scale), height: Int(screen.frame.height * scale)) else { return nil }
+        return ScreenShot(screen: screen, displayID: screen.displayID, image: image)
+    }
+
+    static func white(width: Int, height: Int) -> CGImage? {
+        guard width > 0, height > 0, let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
                                       space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
         context.setFillColor(CGColor(gray: 1, alpha: 1))
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-        guard let image = context.makeImage() else { return nil }
-        return ScreenShot(screen: screen, displayID: screen.displayID, image: image)
+        return context.makeImage()
     }
 }
 

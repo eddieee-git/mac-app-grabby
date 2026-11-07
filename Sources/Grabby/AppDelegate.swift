@@ -151,17 +151,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// 흰 바탕을 띄워 그리게 한다. 화면을 찍지 않으므로 화면 기록 권한이 필요 없다.
+    /// 실제 화면을 어둡게 깔고 가운데에 흰 바탕을 띄워 그리게 한다.
+    /// 화면 기록 권한이 없으면 바깥도 흰 바탕으로 띄운다.
     @objc private func openWhiteboard() {
         guard session == nil else { return }
-        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
-        guard let screen, let board = ScreenShot.whiteboard(on: screen) else { return }
         rememberFrontApp()
-        NSApp.activate(ignoringOtherApps: true)
-        session = CaptureSession(shots: [board], whiteboard: true) { [weak self] result in
-            self?.session = nil
-            if let result { self?.save(result) }
-            self?.returnToPreviousApp()
+        Task { @MainActor in
+            var shots = (try? await ScreenCapturer.hasPermission ? ScreenCapturer.captureAll() : []) ?? []
+            if shots.isEmpty {
+                let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
+                if let screen, let board = ScreenShot.whiteboard(on: screen) { shots = [board] }
+            }
+            guard !shots.isEmpty, session == nil else { return }
+            NSApp.activate(ignoringOtherApps: true)
+            session = CaptureSession(shots: shots, whiteboard: true) { [weak self] result in
+                self?.session = nil
+                if let result { self?.save(result) }
+                self?.returnToPreviousApp()
+            }
         }
     }
 

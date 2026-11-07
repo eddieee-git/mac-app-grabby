@@ -28,7 +28,8 @@ final class CaptureSession {
         // 마우스가 있는 화면이 키 입력을 받게 한다.
         let active = windows.first { $0.frame.contains(mouse) } ?? windows.first
         active?.makeKeyAndOrderFront(nil)
-        if whiteboard { for window in windows { window.overlay.dimAlpha = 0.7 } }
+        // 화이트보드는 바깥에 실제 화면을 어둡게 보여 주고, 고른 영역만 흰 바탕으로 채운다.
+        if whiteboard { for window in windows { window.overlay.blankCanvas = true } }
         if whiteboard, let overlay = active?.overlay {
             let size = overlay.bounds.size
             let board = CGSize(width: min(1200, size.width * 0.8), height: min(800, size.height * 0.75))
@@ -118,8 +119,8 @@ final class OverlayView: NSView {
     private var toolbar: EditToolbar?
     private var handles: HandlesView?
     private var dragStart: CGPoint?
-    /// 영역 밖을 어둡게 하는 정도. 화이트보드는 흰 바탕이라 더 짙게 해야 화면 캡처 때처럼 보인다.
-    var dimAlpha: CGFloat = 0.35
+    /// 화이트보드: 고른 영역을 화면 대신 흰 바탕으로 채운다.
+    var blankCanvas = false
     /// 손잡이를 끌어 영역 크기를 조정하는 중이면 그 손잡이.
     private var resizing: Handle?
 
@@ -174,7 +175,7 @@ final class OverlayView: NSView {
         let dim = NSBezierPath(rect: bounds)
         if let selection { dim.append(NSBezierPath(rect: selection)) }
         dim.windingRule = .evenOdd
-        NSColor.black.withAlphaComponent(dimAlpha).setFill()
+        NSColor.black.withAlphaComponent(0.35).setFill()
         dim.fill()
 
         guard let selection else { return }
@@ -240,7 +241,7 @@ final class OverlayView: NSView {
     }
 
     private func beginEditing(_ rect: CGRect) {
-        guard let image = shot.crop(rect) else { reset(); return }
+        guard let image = content(for: rect) else { reset(); return }
         let canvas = AnnotationCanvas(image: image, pixelScale: shot.scale)
         canvas.frame = rect
         addSubview(canvas)
@@ -264,6 +265,11 @@ final class OverlayView: NSView {
         needsDisplay = true
     }
 
+    /// 캔버스에 놓을 이미지: 화면에서 잘라낸 부분, 화이트보드면 같은 크기의 흰 바탕.
+    private func content(for rect: CGRect) -> CGImage? {
+        blankCanvas ? ScreenShot.white(width: Int(rect.width * shot.scale), height: Int(rect.height * shot.scale)) : shot.crop(rect)
+    }
+
     /// 영역을 미리 고른 채 편집을 시작한다(화이트보드).
     func preselect(_ rect: CGRect, tool: Tool) {
         let rect = rect.intersection(bounds).integral
@@ -277,7 +283,7 @@ final class OverlayView: NSView {
     func applySelection(_ rect: CGRect) {
         guard let canvas, let old = selection else { return }
         let rect = rect.intersection(bounds).integral
-        guard rect.width >= 4, rect.height >= 4, rect != old, let image = shot.crop(rect) else { return }
+        guard rect.width >= 4, rect.height >= 4, rect != old, let image = content(for: rect) else { return }
         selection = rect
         canvas.frame = rect
         canvas.recrop(image, originShift: CGPoint(x: rect.minX - old.minX, y: rect.minY - old.minY))
