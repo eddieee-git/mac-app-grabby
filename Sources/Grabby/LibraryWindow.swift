@@ -90,8 +90,10 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         let divider = NSBox()
         divider.boxType = .separator
 
-        let toolbar = EditToolbar(canvas: canvas, actions: [
-            .init(symbol: "doc.on.doc", title: "복사 (⌘C)") { [weak self] in self?.copyCurrent() },
+        // 탭 창에서는 기본으로 부분 선택 도구를 골라 둔다. 드래그로 고르고 ⌘C로 그 부분만 복사한다.
+        canvas.tool = .select
+        let toolbar = EditToolbar(canvas: canvas, tools: Tool.allCases, actions: [
+            .init(symbol: "doc.on.doc", title: "복사 (⌘C) · 고른 부분이 있으면 그 부분만") { [weak self] in self?.copyCurrent() },
             .init(symbol: "folder", title: "Finder에서 보기") { [weak self] in self?.revealCurrent() },
             .init(symbol: "trash", title: "삭제 (⌫)") { [weak self] in self?.deleteCurrent() },
         ])
@@ -226,6 +228,11 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
 
     func copyCurrent() {
         guard let item = selectedItem else { return }
+        if let part = canvas.selectedImage() {
+            Clipboard.copy(part, scale: item.scale)
+            Toast.show("선택한 부분을 복사했어요", image: NSImage(cgImage: part, size: .zero))
+            return
+        }
         if canvas.hasEdits, item.id == shownID {
             let image = canvas.render()
             persist(item, image)
@@ -278,6 +285,8 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
 
     func undoAnnotation() { canvas.undo() }
 
+    func clearPartSelection() { canvas.clearSelection() }
+
     var isEditingText: Bool { canvas.isEditingText }
 
     func selectTool(_ tool: Tool) { canvas.tool = tool; window?.invalidateCursorRects(for: canvas) }
@@ -300,6 +309,7 @@ final class LibraryWindow: NSWindow {
         }
         switch event.keyCode {
         case 51, 117: library.deleteCurrent() // ⌫, ⌦
+        case 53: library.clearPartSelection() // Esc
         case 123: library.moveSelection(by: -1) // ←
         case 124: library.moveSelection(by: 1) // →
         default:

@@ -17,12 +17,15 @@ final class EditToolbar: NSVisualEffectView {
     private let colors: NSSegmentedControl
     private let widths: NSSegmentedControl
     private var actions: [Action] = []
+    /// 막대에 보여 줄 도구(순서대로).
+    private let toolList: [Tool]
 
     /// `hint`가 있으면 버튼 줄 아래에 작은 안내 문구를 보여 준다.
-    init(canvas: AnnotationCanvas, actions: [Action], hint: String? = nil) {
+    init(canvas: AnnotationCanvas, tools toolList: [Tool], actions: [Action], hint: String? = nil) {
         self.canvas = canvas
         self.actions = actions
-        tools = NSSegmentedControl(images: Tool.allCases.map { Self.symbol($0.symbol, $0.title) },
+        self.toolList = toolList
+        tools = NSSegmentedControl(images: toolList.map { Self.symbol($0.symbol, $0.title) },
                                    trackingMode: .selectOne, target: nil, action: nil)
         colors = NSSegmentedControl(images: AnnotationCanvas.palette.map(Self.swatch), trackingMode: .selectOne, target: nil, action: nil)
         widths = NSSegmentedControl(images: AnnotationCanvas.lineWidths.map(Self.lineSample), trackingMode: .selectOne, target: nil, action: nil)
@@ -35,7 +38,7 @@ final class EditToolbar: NSVisualEffectView {
         layer?.cornerRadius = 8
         layer?.masksToBounds = true
 
-        for tool in Tool.allCases { tools.setToolTip(tool.title, forSegment: tool.rawValue) }
+        for (index, tool) in toolList.enumerated() { tools.setToolTip(tool.title, forSegment: index) }
         tools.target = self
         tools.action = #selector(toolChanged)
         colors.target = self
@@ -95,7 +98,7 @@ final class EditToolbar: NSVisualEffectView {
     required init?(coder: NSCoder) { fatalError() }
 
     private func sync() {
-        tools.selectedSegment = canvas.tool.rawValue
+        tools.selectedSegment = toolList.firstIndex(of: canvas.tool) ?? -1
         colors.selectedSegment = AnnotationCanvas.palette.firstIndex(of: canvas.color) ?? 0
         widths.selectedSegment = AnnotationCanvas.lineWidths.firstIndex(of: canvas.lineWidth) ?? 1
     }
@@ -108,7 +111,7 @@ final class EditToolbar: NSVisualEffectView {
     }
 
     @objc private func toolChanged() {
-        if let tool = Tool(rawValue: tools.selectedSegment) { canvas.tool = tool }
+        if toolList.indices.contains(tools.selectedSegment) { canvas.tool = toolList[tools.selectedSegment] }
         canvas.window?.invalidateCursorRects(for: canvas)
     }
 

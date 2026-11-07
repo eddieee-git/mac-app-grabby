@@ -97,7 +97,7 @@ final class OverlayWindow: NSWindow {
             overlay.nudge(dx: dx, dy: dy, resize: event.modifierFlags.contains(.option))
         default:
             if let canvas, event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
-               let tool = Tool.forKeyCode(event.keyCode) {
+               let tool = Tool.forKeyCode(event.keyCode), tool != .select {
                 canvas.tool = tool
                 invalidateCursorRects(for: canvas)
             } else {
@@ -247,7 +247,8 @@ final class OverlayView: NSView {
         addSubview(canvas)
         self.canvas = canvas
 
-        let toolbar = EditToolbar(canvas: canvas, actions: [
+        // 화면 위 편집에서는 영역 자체가 선택이므로 부분 선택 도구는 뺀다.
+        let toolbar = EditToolbar(canvas: canvas, tools: Tool.allCases.filter { $0 != .select }, actions: [
             .init(symbol: "xmark", title: "취소 (Esc)") { [weak self] in self?.session?.cancel() },
             .init(symbol: "checkmark", title: "복사하고 탭에 추가 (↩ 또는 ⌘C)", label: "완료", isPrimary: true) { [weak self] in
                 guard let self else { return }

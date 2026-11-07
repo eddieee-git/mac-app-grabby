@@ -4,10 +4,11 @@ import CoreImage
 
 /// 편집 도구. `keyCode`는 도구를 바꾸는 한 글자 단축키다(한글 입력 상태에서도 동작하도록 키 코드로 비교한다).
 enum Tool: Int, CaseIterable {
-    case arrow, rect, pen, text, highlight, mosaic
+    case select, arrow, rect, pen, text, highlight, mosaic
 
     var symbol: String {
         switch self {
+        case .select: return "rectangle.dashed"
         case .arrow: return "arrow.up.right"
         case .rect: return "rectangle"
         case .pen: return "scribble"
@@ -19,6 +20,7 @@ enum Tool: Int, CaseIterable {
 
     var title: String {
         switch self {
+        case .select: return "부분 선택 (V) · ⌘C로 선택한 부분만 복사"
         case .arrow: return "화살표 (A)"
         case .rect: return "네모 (R)"
         case .pen: return "자유그리기 (P)"
@@ -30,6 +32,7 @@ enum Tool: Int, CaseIterable {
 
     static func forKeyCode(_ code: UInt16) -> Tool? {
         switch Int(code) {
+        case kVK_ANSI_V: return .select
         case kVK_ANSI_A: return .arrow
         case kVK_ANSI_R: return .rect
         case kVK_ANSI_P: return .pen
@@ -84,6 +87,8 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
     var onToolChange: (() -> Void)?
 
     private var draft: Annotation?
+    /// 부분 선택 도구로 고른 영역(이미지 좌표). ⌘C로 이 부분만 복사한다.
+    private(set) var selectionRect: CGRect? { didSet { needsDisplay = true } }
     private var dragStart: CGPoint?
     private var textField: NSTextField?
     private var textOrigin: CGPoint = .zero
@@ -109,6 +114,7 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
         self.image = image
         self.pixelScale = pixelScale
         pixelatedCache = nil
+        selectionRect = nil
         annotations = []
         needsDisplay = true
     }
@@ -165,7 +171,34 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
         context.scaleBy(x: s, y: s)
         context.interpolationQuality = .high
         drawContents(includeDraft: true)
+        if let selectionRect { drawSelection(selectionRect, viewScale: s) }
         context.restoreGState()
+    }
+
+    /// 선택 영역 밖을 살짝 어둡게 하고 점선 테두리를 그린다.
+    private func drawSelection(_ rect: CGRect, viewScale s: CGFloat) {
+        let dim = NSBezierPath(rect: CGRect(origin: .zero, size: imageSize))
+        dim.append(NSBezierPath(rect: rect))
+        dim.windingRule = .evenOdd
+        NSColor.black.withAlphaComponent(0.3).setFill()
+        dim.fill()
+        let border = NSBezierPath(rect: rect)
+        border.lineWidth = 1 / s
+        NSColor.white.setStroke()
+        border.stroke()
+        border.setLineDash([4 / s, 4 / s], count: 2, phase: 0)
+        NSColor.black.setStroke()
+        border.stroke()
+    }
+
+    func clearSelection() { selectionRect = nil }
+
+    /// 표시를 합친 이미지에서 선택한 부분만 잘라 낸다. 선택이 없으면 nil.
+    func selectedImage() -> CGImage? {
+        guard let rect = selectionRect else { return nil }
+        let pixels = CGRect(x: rect.minX * pixelScale, y: rect.minY * pixelScale,
+                            width: rect.width * pixelScale, height: rect.height * pixelScale).integral
+        return render().cropping(to: pixels)
     }
 
     override func resetCursorRects() {
@@ -305,6 +338,11 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
             return
         }
         let point = toImage(location)
+        if tool == .select {
+            selectionRect = nil
+            dragStart = point
+            return
+        }
         if tool == .text {
             beginText(at: point)
             return
@@ -316,6 +354,12 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
     override func mouseDragged(with event: NSEvent) {
         guard let start = dragStart else { return }
         var point = toImage(convert(event.locationInWindow, from: nil))
+        if tool == .select {
+            if event.modifierFlags.contains(.shift) { point = Self.constrain(point, from: start, square: true) }
+            selectionRect = CGRect(x: min(start.x, point.x), y: min(start.y, point.y),
+                                   width: abs(point.x - start.x), height: abs(point.y - start.y))
+            return
+        }
         if tool == .pen {
             if case let .pen(points, penColor, width) = draft, let last = points.last, hypot(point.x - last.x, point.y - last.y) >= 1 {
                 draft = .pen(points + [point], color: penColor, width: width)
@@ -330,12 +374,17 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
         case .rect: draft = .rect(rect, color: color, width: lineWidth)
         case .highlight: draft = .highlight(rect, color: color)
         case .mosaic: draft = .mosaic(rect)
-        case .text, .pen: break
+        case .text, .pen, .select: break
         }
         needsDisplay = true
     }
 
     override func mouseUp(with event: NSEvent) {
+        if tool == .select {
+            if let r = selectionRect, r.width < 3 || r.height < 3 { selectionRect = nil }
+            dragStart = nil
+            return
+        }
         defer { draft = nil; dragStart = nil; needsDisplay = true }
         guard let draft, isMeaningful(draft) else { return }
         annotations.append(draft)
