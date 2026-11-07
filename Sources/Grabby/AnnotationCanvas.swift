@@ -43,9 +43,9 @@ enum Tool: Int, CaseIterable {
 
 /// 이미지 위에 그린 표시 하나. 좌표는 이미지의 왼쪽 위 기준 포인트 단위다.
 enum Annotation {
-    case arrow(from: CGPoint, to: CGPoint, color: NSColor)
-    case rect(CGRect, color: NSColor)
-    case pen([CGPoint], color: NSColor)
+    case arrow(from: CGPoint, to: CGPoint, color: NSColor, width: CGFloat)
+    case rect(CGRect, color: NSColor, width: CGFloat)
+    case pen([CGPoint], color: NSColor, width: CGFloat)
     case text(String, origin: CGPoint, color: NSColor)
     case highlight(CGRect, color: NSColor)
     case mosaic(CGRect)
@@ -55,9 +55,9 @@ extension Annotation {
     func offsetBy(dx: CGFloat, dy: CGFloat) -> Annotation {
         func move(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x + dx, y: p.y + dy) }
         switch self {
-        case let .arrow(from, to, color): return .arrow(from: move(from), to: move(to), color: color)
-        case let .rect(r, color): return .rect(r.offsetBy(dx: dx, dy: dy), color: color)
-        case let .pen(points, color): return .pen(points.map(move), color: color)
+        case let .arrow(from, to, color, width): return .arrow(from: move(from), to: move(to), color: color, width: width)
+        case let .rect(r, color, width): return .rect(r.offsetBy(dx: dx, dy: dy), color: color, width: width)
+        case let .pen(points, color, width): return .pen(points.map(move), color: color, width: width)
         case let .text(string, origin, color): return .text(string, origin: move(origin), color: color)
         case let .highlight(r, color): return .highlight(r.offsetBy(dx: dx, dy: dy), color: color)
         case let .mosaic(r): return .mosaic(r.offsetBy(dx: dx, dy: dy))
@@ -69,6 +69,8 @@ extension Annotation {
 final class AnnotationCanvas: NSView, NSTextFieldDelegate {
     static let palette: [NSColor] = [.systemRed, .systemYellow, .systemGreen, .systemBlue, .black, .white]
     static let fontSize: CGFloat = 20
+    /// 선 굵기 단계: 얇게, 보통, 굵게
+    static let lineWidths: [CGFloat] = [2, 4, 8]
 
     private(set) var image: CGImage
     /// 이미지 픽셀 수 / 포인트 수
@@ -77,6 +79,7 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
 
     var tool: Tool = .arrow { didSet { commitText(); onToolChange?() } }
     var color: NSColor = AnnotationCanvas.palette[0] { didSet { onToolChange?() } }
+    var lineWidth: CGFloat = AnnotationCanvas.lineWidths[1] { didSet { onToolChange?() } }
     var onChange: (() -> Void)?
     var onToolChange: (() -> Void)?
 
@@ -180,15 +183,15 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
 
     private func draw(_ annotation: Annotation) {
         switch annotation {
-        case let .arrow(from, to, color):
-            Self.drawArrow(from: from, to: to, color: color)
-        case let .rect(rect, color):
+        case let .arrow(from, to, color, width):
+            Self.drawArrow(from: from, to: to, color: color, width: width)
+        case let .rect(rect, color, width):
             let path = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
-            path.lineWidth = 3
+            path.lineWidth = width
             color.setStroke()
             path.stroke()
-        case let .pen(points, color):
-            Self.drawPen(points, color: color)
+        case let .pen(points, color, width):
+            Self.drawPen(points, color: color, width: width)
         case let .text(string, origin, color):
             (string as NSString).draw(at: origin, withAttributes: Self.textAttributes(color: color, size: Self.fontSize))
         case let .highlight(rect, color):
@@ -214,7 +217,7 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
     }
 
     /// 점 사이를 중간점 곡선으로 이어 손떨림을 부드럽게 한다.
-    private static func drawPen(_ points: [CGPoint], color: NSColor) {
+    private static func drawPen(_ points: [CGPoint], color: NSColor, width: CGFloat) {
         guard let first = points.first else { return }
         let path = NSBezierPath()
         path.move(to: first)
@@ -227,18 +230,17 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
             }
             path.line(to: points[points.count - 1])
         }
-        path.lineWidth = 4
+        path.lineWidth = width
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
         color.setStroke()
         path.stroke()
     }
 
-    private static func drawArrow(from a: CGPoint, to b: CGPoint, color: NSColor) {
+    private static func drawArrow(from a: CGPoint, to b: CGPoint, color: NSColor, width: CGFloat) {
         let length = hypot(b.x - a.x, b.y - a.y)
         guard length > 1 else { return }
-        let width: CGFloat = 4
-        let head = min(18, length * 0.6)
+        let head = min(max(14, width * 4.5), length * 0.6)
         let angle = atan2(b.y - a.y, b.x - a.x)
         let spread: CGFloat = 0.45
         let base = CGPoint(x: b.x - cos(angle) * head * 0.8, y: b.y - sin(angle) * head * 0.8)
@@ -308,15 +310,15 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
             return
         }
         dragStart = point
-        if tool == .pen { draft = .pen([point], color: color) }
+        if tool == .pen { draft = .pen([point], color: color, width: lineWidth) }
     }
 
     override func mouseDragged(with event: NSEvent) {
         guard let start = dragStart else { return }
         var point = toImage(convert(event.locationInWindow, from: nil))
         if tool == .pen {
-            if case let .pen(points, penColor) = draft, let last = points.last, hypot(point.x - last.x, point.y - last.y) >= 1 {
-                draft = .pen(points + [point], color: penColor)
+            if case let .pen(points, penColor, width) = draft, let last = points.last, hypot(point.x - last.x, point.y - last.y) >= 1 {
+                draft = .pen(points + [point], color: penColor, width: width)
                 needsDisplay = true
             }
             return
@@ -324,8 +326,8 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
         if event.modifierFlags.contains(.shift) { point = Self.constrain(point, from: start, square: tool != .arrow) }
         let rect = CGRect(x: min(start.x, point.x), y: min(start.y, point.y), width: abs(point.x - start.x), height: abs(point.y - start.y))
         switch tool {
-        case .arrow: draft = .arrow(from: start, to: point, color: color)
-        case .rect: draft = .rect(rect, color: color)
+        case .arrow: draft = .arrow(from: start, to: point, color: color, width: lineWidth)
+        case .rect: draft = .rect(rect, color: color, width: lineWidth)
         case .highlight: draft = .highlight(rect, color: color)
         case .mosaic: draft = .mosaic(rect)
         case .text, .pen: break
@@ -353,9 +355,9 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
 
     private func isMeaningful(_ annotation: Annotation) -> Bool {
         switch annotation {
-        case let .arrow(from, to, _): return hypot(to.x - from.x, to.y - from.y) > 4
-        case let .rect(r, _), let .highlight(r, _), let .mosaic(r): return r.width > 3 && r.height > 3
-        case let .pen(points, _): return points.count > 1
+        case let .arrow(from, to, _, _): return hypot(to.x - from.x, to.y - from.y) > 4
+        case let .rect(r, _, _), let .highlight(r, _), let .mosaic(r): return r.width > 3 && r.height > 3
+        case let .pen(points, _, _): return points.count > 1
         case .text: return true
         }
     }

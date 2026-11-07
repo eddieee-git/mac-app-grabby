@@ -8,6 +8,7 @@ final class AppSettings: ObservableObject {
     static let shared = AppSettings()
     private let defaults = UserDefaults.standard
     private let hotKeysKey = "hotKeys"
+    private let knownActionsKey = "knownHotKeyActions"
 
     /// 전역 단축키. 키는 `HotKeyAction.rawValue`이고, 없는 동작은 단축키를 쓰지 않는다.
     @Published var hotKeys: [String: KeyCombo] {
@@ -18,8 +19,17 @@ final class AppSettings: ObservableObject {
     @Published var failedHotKeys: Set<HotKeyAction> = []
 
     private init() {
-        hotKeys = defaults.data(forKey: hotKeysKey).flatMap { try? JSONDecoder().decode([String: KeyCombo].self, from: $0) }
+        var saved = defaults.data(forKey: hotKeysKey).flatMap { try? JSONDecoder().decode([String: KeyCombo].self, from: $0) }
             ?? KeyCombo.defaults
+        // 나중에 추가된 동작은 한 번만 기본 단축키를 넣어 준다. 사용자가 지운 단축키는 되살리지 않는다.
+        var known = Set(defaults.stringArray(forKey: knownActionsKey) ?? Array(saved.keys))
+        for action in HotKeyAction.allCases where !known.contains(action.rawValue) {
+            if saved[action.rawValue] == nil, let combo = KeyCombo.defaults[action.rawValue],
+               !saved.values.contains(combo) { saved[action.rawValue] = combo }
+            known.insert(action.rawValue)
+        }
+        hotKeys = saved
+        defaults.set(Array(known), forKey: knownActionsKey)
     }
 }
 

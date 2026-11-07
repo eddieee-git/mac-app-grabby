@@ -15,6 +15,7 @@ final class EditToolbar: NSVisualEffectView {
     private let canvas: AnnotationCanvas
     private let tools: NSSegmentedControl
     private let colors: NSSegmentedControl
+    private let widths: NSSegmentedControl
     private var actions: [Action] = []
 
     /// `hint`가 있으면 버튼 줄 아래에 작은 안내 문구를 보여 준다.
@@ -24,6 +25,7 @@ final class EditToolbar: NSVisualEffectView {
         tools = NSSegmentedControl(images: Tool.allCases.map { Self.symbol($0.symbol, $0.title) },
                                    trackingMode: .selectOne, target: nil, action: nil)
         colors = NSSegmentedControl(images: AnnotationCanvas.palette.map(Self.swatch), trackingMode: .selectOne, target: nil, action: nil)
+        widths = NSSegmentedControl(images: AnnotationCanvas.lineWidths.map(Self.lineSample), trackingMode: .selectOne, target: nil, action: nil)
         super.init(frame: .zero)
 
         material = .hudWindow
@@ -38,9 +40,12 @@ final class EditToolbar: NSVisualEffectView {
         tools.action = #selector(toolChanged)
         colors.target = self
         colors.action = #selector(colorChanged)
+        widths.target = self
+        widths.action = #selector(widthChanged)
+        for (index, title) in ["얇게", "보통", "굵게"].enumerated() { widths.setToolTip("선 굵기: \(title)", forSegment: index) }
 
         let undo = button(symbol: "arrow.uturn.backward", title: "되돌리기 (⌘Z)", action: #selector(undoTapped))
-        var views: [NSView] = [tools, colors, undo]
+        var views: [NSView] = [tools, colors, widths, undo]
         for (index, action) in actions.enumerated() {
             let b = button(symbol: action.symbol, title: action.title, action: #selector(actionTapped(_:)))
             b.tag = index
@@ -92,6 +97,7 @@ final class EditToolbar: NSVisualEffectView {
     private func sync() {
         tools.selectedSegment = canvas.tool.rawValue
         colors.selectedSegment = AnnotationCanvas.palette.firstIndex(of: canvas.color) ?? 0
+        widths.selectedSegment = AnnotationCanvas.lineWidths.firstIndex(of: canvas.lineWidth) ?? 1
     }
 
     private func button(symbol: String, title: String, action: Selector) -> NSButton {
@@ -110,12 +116,32 @@ final class EditToolbar: NSVisualEffectView {
         canvas.color = AnnotationCanvas.palette[max(0, colors.selectedSegment)]
     }
 
+    @objc private func widthChanged() {
+        canvas.lineWidth = AnnotationCanvas.lineWidths[max(0, widths.selectedSegment)]
+    }
+
     @objc private func undoTapped() { canvas.undo() }
 
     @objc private func actionTapped(_ sender: NSButton) { actions[sender.tag].handler() }
 
     private static func symbol(_ name: String, _ description: String) -> NSImage {
         NSImage(systemSymbolName: name, accessibilityDescription: description) ?? NSImage()
+    }
+
+    /// 굵기를 보여 주는 가로선 아이콘.
+    private static func lineSample(_ width: CGFloat) -> NSImage {
+        let image = NSImage(size: NSSize(width: 18, height: 14), flipped: false) { rect in
+            let line = NSBezierPath()
+            line.move(to: NSPoint(x: 2, y: rect.midY))
+            line.line(to: NSPoint(x: rect.maxX - 2, y: rect.midY))
+            line.lineWidth = min(width, 6) * 0.9
+            line.lineCapStyle = .round
+            NSColor.black.setStroke()
+            line.stroke()
+            return true
+        }
+        image.isTemplate = true
+        return image
     }
 
     private static func swatch(_ color: NSColor) -> NSImage {

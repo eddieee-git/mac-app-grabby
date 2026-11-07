@@ -3,12 +3,13 @@ import Carbon
 
 /// 전역 단축키로 실행할 수 있는 동작.
 enum HotKeyAction: String, CaseIterable {
-    case captureArea, repeatLastArea
+    case captureArea, repeatLastArea, whiteboard
 
     var title: String {
         switch self {
         case .captureArea: return "영역 캡처"
         case .repeatLastArea: return "마지막 영역 다시 캡처"
+        case .whiteboard: return "화이트보드"
         }
     }
 }
@@ -25,6 +26,7 @@ struct KeyCombo: Codable, Equatable {
         return [
             HotKeyAction.captureArea.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_1), modifiers: controlCommand, key: "1"),
             HotKeyAction.repeatLastArea.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_2), modifiers: controlCommand, key: "2"),
+            HotKeyAction.whiteboard.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_3), modifiers: controlCommand, key: "3"),
         ]
     }()
 

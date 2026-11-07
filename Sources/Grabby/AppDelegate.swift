@@ -46,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch action {
         case .captureArea: captureArea()
         case .repeatLastArea: repeatLastArea()
+        case .whiteboard: openWhiteboard()
         }
     }
 
@@ -75,9 +76,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         let capture = item(HotKeyAction.captureArea.title, action: #selector(captureArea))
         let repeatLast = item(HotKeyAction.repeatLastArea.title, action: #selector(repeatLastArea))
-        hotKeyItems = [.captureArea: capture, .repeatLastArea: repeatLast]
+        let whiteboard = item(HotKeyAction.whiteboard.title, action: #selector(openWhiteboard))
+        hotKeyItems = [.captureArea: capture, .repeatLastArea: repeatLast, .whiteboard: whiteboard]
         menu.addItem(capture)
         menu.addItem(repeatLast)
+        menu.addItem(whiteboard)
         menu.addItem(.separator())
         menu.addItem(item("캡처 창 열기", action: #selector(openLibrary)))
         menu.addItem(.separator())
@@ -148,6 +151,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// 흰 바탕을 띄워 그리게 한다. 화면을 찍지 않으므로 화면 기록 권한이 필요 없다.
+    @objc private func openWhiteboard() {
+        guard session == nil else { return }
+        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
+        guard let screen, let board = ScreenShot.whiteboard(on: screen) else { return }
+        rememberFrontApp()
+        NSApp.activate(ignoringOtherApps: true)
+        session = CaptureSession(shots: [board], whiteboard: true) { [weak self] result in
+            self?.session = nil
+            if let result { self?.save(result) }
+            self?.returnToPreviousApp()
+        }
+    }
+
     /// 마지막으로 고른 영역을 편집 없이 바로 다시 찍어 복사한다.
     @objc private func repeatLastArea() {
         guard session == nil else { return }
@@ -176,8 +193,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func save(_ result: CaptureResult) {
         let item = CaptureStore.shared.add(result.image, scale: result.pixelScale)
         Clipboard.copy(result.image, scale: result.pixelScale)
-        UserDefaults.standard.set(NSStringFromRect(result.rect), forKey: lastRectKey)
-        UserDefaults.standard.set(Int(result.displayID), forKey: lastDisplayKey)
+        if !result.isWhiteboard {
+            UserDefaults.standard.set(NSStringFromRect(result.rect), forKey: lastRectKey)
+            UserDefaults.standard.set(Int(result.displayID), forKey: lastDisplayKey)
+        }
         Toast.show("복사했어요 · ⌘V로 붙여 넣기", image: CaptureStore.shared.thumbnail(for: item))
         if library == nil { library = LibraryWindowController() }
         library?.showWithoutFocus()

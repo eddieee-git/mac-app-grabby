@@ -7,6 +7,8 @@ struct CaptureResult {
     let pixelScale: CGFloat
     let rect: CGRect
     let displayID: CGDirectDisplayID
+    /// 화이트보드 결과는 화면을 찍은 게 아니므로 '마지막 영역'으로 기억하지 않는다.
+    var isWhiteboard = false
 }
 
 /// 멈춘 화면들을 덮어 영역을 고르고, 고른 자리에서 바로 편집하게 한다.
@@ -14,15 +16,24 @@ final class CaptureSession {
     private var windows: [OverlayWindow] = []
     private let completion: (CaptureResult?) -> Void
     private var finished = false
+    private let isWhiteboard: Bool
 
-    init(shots: [ScreenShot], completion: @escaping (CaptureResult?) -> Void) {
+    /// `whiteboard`이면 첫 화면의 가운데 영역을 미리 골라 둔 채 자유그리기로 시작한다.
+    init(shots: [ScreenShot], whiteboard: Bool = false, completion: @escaping (CaptureResult?) -> Void) {
         self.completion = completion
+        isWhiteboard = whiteboard
         windows = shots.map { OverlayWindow(shot: $0, session: self) }
         let mouse = NSEvent.mouseLocation
         for window in windows { window.orderFrontRegardless() }
         // 마우스가 있는 화면이 키 입력을 받게 한다.
         let active = windows.first { $0.frame.contains(mouse) } ?? windows.first
         active?.makeKeyAndOrderFront(nil)
+        if whiteboard, let overlay = active?.overlay {
+            let size = overlay.bounds.size
+            let board = CGSize(width: min(1200, size.width * 0.8), height: min(800, size.height * 0.75))
+            overlay.preselect(CGRect(x: (size.width - board.width) / 2, y: (size.height - board.height) / 2,
+                                     width: board.width, height: board.height), tool: .pen)
+        }
     }
 
     /// 한 화면에서 새로 영역을 고르기 시작하면 다른 화면의 선택은 지운다.
@@ -33,7 +44,8 @@ final class CaptureSession {
 
     fileprivate func confirm(_ overlay: OverlayView) {
         guard let canvas = overlay.canvas, let rect = overlay.selection else { return }
-        finish(CaptureResult(image: canvas.render(), pixelScale: canvas.pixelScale, rect: rect, displayID: overlay.shot.displayID))
+        finish(CaptureResult(image: canvas.render(), pixelScale: canvas.pixelScale, rect: rect, displayID: overlay.shot.displayID,
+                             isWhiteboard: isWhiteboard))
     }
 
     fileprivate func cancel() { finish(nil) }
@@ -247,6 +259,15 @@ final class OverlayView: NSView {
         window?.makeFirstResponder(self)
         window?.invalidateCursorRects(for: self)
         needsDisplay = true
+    }
+
+    /// 영역을 미리 고른 채 편집을 시작한다(화이트보드).
+    func preselect(_ rect: CGRect, tool: Tool) {
+        let rect = rect.intersection(bounds).integral
+        guard rect.width >= 4, rect.height >= 4 else { return }
+        selection = rect
+        beginEditing(rect)
+        canvas?.tool = tool
     }
 
     /// 편집 중에 영역을 바꾼다. 그린 표시는 화면에서 같은 자리에 남는다.
