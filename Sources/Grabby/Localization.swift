@@ -140,6 +140,14 @@ enum Localization {
         "⌘, ⌃, ⌥ 중 하나와 함께 누르세요.": "Press together with ⌘, ⌃ or ⌥.",
         "%@에서 쓰는 단축키예요.": "Already used by %@.",
         // 새 기능
+        "직선 (L)": "Line (L)",
+        "동그라미 (O)": "Ellipse (O)",
+        "번호 (N) · 누를 때마다 1, 2, 3…": "Step (N) · 1, 2, 3… with each click",
+        "흐리게 (B)": "Blur (B)",
+        "직선": "Line",
+        "동그라미": "Ellipse",
+        "번호": "Step",
+        "흐리게": "Blur",
         "%@는 macOS 스크린샷 단축키라 쓸 수 없어요.": "%@ is a macOS screenshot shortcut and can't be used.",
         "%@이(가) 켜져 있어요 · 단축키가 겹치면 설정에서 바꿔 주세요": "%@ is running · Change shortcuts in Settings if they overlap",
         "%@이(가) 켜져 있어요. 같은 단축키를 쓰면 먼저 등록한 앱이 키를 받으니, 겹치지 않게 바꿔 주세요.":

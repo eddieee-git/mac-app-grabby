@@ -4,17 +4,21 @@ import CoreImage
 
 /// 편집 도구. `keyCode`는 도구를 바꾸는 한 글자 단축키다(한글 입력 상태에서도 동작하도록 키 코드로 비교한다).
 enum Tool: Int, CaseIterable {
-    case select, arrow, rect, pen, text, highlight, mosaic
+    case select, arrow, line, rect, ellipse, pen, text, step, highlight, mosaic, blur
 
     var symbol: String {
         switch self {
         case .select: return "rectangle.dashed"
         case .arrow: return "arrow.up.right"
+        case .line: return "line.diagonal"
         case .rect: return "rectangle"
+        case .ellipse: return "circle"
         case .pen: return "scribble"
         case .text: return "textformat"
+        case .step: return "1.circle"
         case .highlight: return "highlighter"
         case .mosaic: return "square.grid.3x3.fill"
+        case .blur: return "drop"
         }
     }
 
@@ -22,11 +26,15 @@ enum Tool: Int, CaseIterable {
         switch self {
         case .select: return L("부분 선택 (V) · ⌘C로 선택한 부분만 복사")
         case .arrow: return L("화살표 (A)")
+        case .line: return L("직선 (L)")
         case .rect: return L("네모 (R)")
+        case .ellipse: return L("동그라미 (O)")
         case .pen: return L("자유그리기 (P)")
         case .text: return L("텍스트 (T)")
+        case .step: return L("번호 (N) · 누를 때마다 1, 2, 3…")
         case .highlight: return L("형광펜 (H)")
         case .mosaic: return L("모자이크 (M)")
+        case .blur: return L("흐리게 (B)")
         }
     }
 
@@ -35,11 +43,15 @@ enum Tool: Int, CaseIterable {
         switch self {
         case .select: return L("부분 선택")
         case .arrow: return L("화살표")
+        case .line: return L("직선")
         case .rect: return L("네모")
+        case .ellipse: return L("동그라미")
         case .pen: return L("자유그리기")
         case .text: return L("텍스트")
+        case .step: return L("번호")
         case .highlight: return L("형광펜")
         case .mosaic: return L("모자이크")
+        case .blur: return L("흐리게")
         }
     }
 
@@ -48,7 +60,11 @@ enum Tool: Int, CaseIterable {
         switch self {
         case .select: return "select"
         case .arrow: return "arrow"
+        case .line: return "line"
         case .rect: return "rect"
+        case .ellipse: return "ellipse"
+        case .step: return "step"
+        case .blur: return "blur"
         case .pen: return "pen"
         case .text: return "text"
         case .highlight: return "highlight"
@@ -65,7 +81,11 @@ enum Tool: Int, CaseIterable {
         switch Int(code) {
         case kVK_ANSI_V: return .select
         case kVK_ANSI_A: return .arrow
+        case kVK_ANSI_L: return .line
         case kVK_ANSI_R: return .rect
+        case kVK_ANSI_O: return .ellipse
+        case kVK_ANSI_N: return .step
+        case kVK_ANSI_B: return .blur
         case kVK_ANSI_P: return .pen
         case kVK_ANSI_T: return .text
         case kVK_ANSI_H: return .highlight
@@ -78,7 +98,12 @@ enum Tool: Int, CaseIterable {
 /// 이미지 위에 그린 표시 하나. 좌표는 이미지의 왼쪽 위 기준 포인트 단위다.
 enum Annotation {
     case arrow(from: CGPoint, to: CGPoint, color: NSColor, width: CGFloat)
+    case line(from: CGPoint, to: CGPoint, color: NSColor, width: CGFloat)
     case rect(CGRect, color: NSColor, width: CGFloat)
+    case ellipse(CGRect, color: NSColor, width: CGFloat)
+    /// 번호 스티커. `level`은 크기 단계(0, 1, 2).
+    case step(center: CGPoint, number: Int, color: NSColor, level: Int)
+    case blur(CGRect)
     case pen([CGPoint], color: NSColor, width: CGFloat)
     case text(String, origin: CGPoint, color: NSColor, size: CGFloat)
     case highlight(CGRect, color: NSColor)
@@ -90,7 +115,11 @@ extension Annotation {
         func move(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x + dx, y: p.y + dy) }
         switch self {
         case let .arrow(from, to, color, width): return .arrow(from: move(from), to: move(to), color: color, width: width)
+        case let .line(from, to, color, width): return .line(from: move(from), to: move(to), color: color, width: width)
         case let .rect(r, color, width): return .rect(r.offsetBy(dx: dx, dy: dy), color: color, width: width)
+        case let .ellipse(r, color, width): return .ellipse(r.offsetBy(dx: dx, dy: dy), color: color, width: width)
+        case let .step(center, number, color, level): return .step(center: move(center), number: number, color: color, level: level)
+        case let .blur(r): return .blur(r.offsetBy(dx: dx, dy: dy))
         case let .pen(points, color, width): return .pen(points.map(move), color: color, width: width)
         case let .text(string, origin, color, size): return .text(string, origin: move(origin), color: color, size: size)
         case let .highlight(r, color): return .highlight(r.offsetBy(dx: dx, dy: dy), color: color)
@@ -100,19 +129,23 @@ extension Annotation {
 
     var color: NSColor? {
         switch self {
-        case let .arrow(_, _, c, _), let .rect(_, c, _), let .pen(_, c, _), let .text(_, _, c, _), let .highlight(_, c): return c
-        case .mosaic: return nil
+        case let .arrow(_, _, c, _), let .line(_, _, c, _), let .rect(_, c, _), let .ellipse(_, c, _), let .pen(_, c, _),
+             let .text(_, _, c, _), let .highlight(_, c), let .step(_, _, c, _): return c
+        case .mosaic, .blur: return nil
         }
     }
 
     func withColor(_ c: NSColor) -> Annotation {
         switch self {
         case let .arrow(a, b, _, w): return .arrow(from: a, to: b, color: c, width: w)
+        case let .line(a, b, _, w): return .line(from: a, to: b, color: c, width: w)
         case let .rect(r, _, w): return .rect(r, color: c, width: w)
+        case let .ellipse(r, _, w): return .ellipse(r, color: c, width: w)
+        case let .step(p, n, _, level): return .step(center: p, number: n, color: c, level: level)
         case let .pen(p, _, w): return .pen(p, color: c, width: w)
         case let .text(s, o, _, size): return .text(s, origin: o, color: c, size: size)
         case let .highlight(r, _): return .highlight(r, color: c)
-        case .mosaic: return self
+        case .mosaic, .blur: return self
         }
     }
 
@@ -121,8 +154,11 @@ extension Annotation {
         let width = AnnotationCanvas.lineWidths[level]
         switch self {
         case let .arrow(a, b, c, _): return .arrow(from: a, to: b, color: c, width: width)
+        case let .line(a, b, c, _): return .line(from: a, to: b, color: c, width: width)
         case let .rect(r, c, _): return .rect(r, color: c, width: width)
+        case let .ellipse(r, c, _): return .ellipse(r, color: c, width: width)
         case let .pen(p, c, _): return .pen(p, color: c, width: width)
+        case let .step(p, n, c, _): return .step(center: p, number: n, color: c, level: level)
         case let .text(s, o, c, _): return .text(s, origin: o, color: c, size: AnnotationCanvas.textSizes[level])
         default: return self
         }
@@ -130,7 +166,9 @@ extension Annotation {
 
     var widthLevel: Int? {
         switch self {
-        case let .arrow(_, _, _, w), let .rect(_, _, w), let .pen(_, _, w): return AnnotationCanvas.lineWidths.firstIndex(of: w)
+        case let .arrow(_, _, _, w), let .line(_, _, _, w), let .rect(_, _, w), let .ellipse(_, _, w), let .pen(_, _, w):
+            return AnnotationCanvas.lineWidths.firstIndex(of: w)
+        case let .step(_, _, _, level): return level
         case let .text(_, _, _, size): return AnnotationCanvas.textSizes.firstIndex(of: size)
         default: return nil
         }
@@ -140,7 +178,7 @@ extension Annotation {
 // MARK: 저장 형식 (탭에서 나중에 다시 고칠 수 있게 원본과 함께 저장한다)
 
 extension Annotation: Codable {
-    private enum Keys: String, CodingKey { case kind, points, rect, color, width, text, size }
+    private enum Keys: String, CodingKey { case kind, points, rect, color, width, text, size, number }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -152,7 +190,17 @@ extension Annotation: Codable {
             let p = try c.decode([CGPoint].self, forKey: .points)
             guard p.count == 2 else { throw DecodingError.dataCorruptedError(forKey: .points, in: c, debugDescription: "arrow") }
             self = .arrow(from: p[0], to: p[1], color: color, width: width)
+        case "line":
+            let p = try c.decode([CGPoint].self, forKey: .points)
+            guard p.count == 2 else { throw DecodingError.dataCorruptedError(forKey: .points, in: c, debugDescription: "line") }
+            self = .line(from: p[0], to: p[1], color: color, width: width)
         case "rect": self = .rect(try c.decode(CGRect.self, forKey: .rect), color: color, width: width)
+        case "ellipse": self = .ellipse(try c.decode(CGRect.self, forKey: .rect), color: color, width: width)
+        case "step":
+            let center = try c.decode([CGPoint].self, forKey: .points).first ?? .zero
+            self = .step(center: center, number: try c.decode(Int.self, forKey: .number), color: color,
+                         level: Int(try c.decodeIfPresent(CGFloat.self, forKey: .size) ?? 1))
+        case "blur": self = .blur(try c.decode(CGRect.self, forKey: .rect))
         case "pen": self = .pen(try c.decode([CGPoint].self, forKey: .points), color: color, width: width)
         case "text":
             let origin = try c.decode([CGPoint].self, forKey: .points).first ?? .zero
@@ -170,9 +218,20 @@ extension Annotation: Codable {
         case let .arrow(a, b, color, width):
             try c.encode("arrow", forKey: .kind); try c.encode([a, b], forKey: .points)
             try c.encode(Self.components(color), forKey: .color); try c.encode(width, forKey: .width)
+        case let .line(a, b, color, width):
+            try c.encode("line", forKey: .kind); try c.encode([a, b], forKey: .points)
+            try c.encode(Self.components(color), forKey: .color); try c.encode(width, forKey: .width)
         case let .rect(r, color, width):
             try c.encode("rect", forKey: .kind); try c.encode(r, forKey: .rect)
             try c.encode(Self.components(color), forKey: .color); try c.encode(width, forKey: .width)
+        case let .ellipse(r, color, width):
+            try c.encode("ellipse", forKey: .kind); try c.encode(r, forKey: .rect)
+            try c.encode(Self.components(color), forKey: .color); try c.encode(width, forKey: .width)
+        case let .step(center, number, color, level):
+            try c.encode("step", forKey: .kind); try c.encode([center], forKey: .points); try c.encode(number, forKey: .number)
+            try c.encode(Self.components(color), forKey: .color); try c.encode(CGFloat(level), forKey: .size)
+        case let .blur(r):
+            try c.encode("blur", forKey: .kind); try c.encode(r, forKey: .rect)
         case let .pen(points, color, width):
             try c.encode("pen", forKey: .kind); try c.encode(points, forKey: .points)
             try c.encode(Self.components(color), forKey: .color); try c.encode(width, forKey: .width)
@@ -242,6 +301,9 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
     private var textField: NSTextField?
     private var textOrigin: CGPoint = .zero
     private var pixelatedCache: CGImage?
+    private var blurredCache: CGImage?
+    /// 번호 스티커 크기(지름) 단계
+    static let stepSizes: [CGFloat] = [22, 28, 38]
     private var history: [[Annotation]] = []
     private var future: [[Annotation]] = []
 
@@ -269,6 +331,7 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
         self.image = image
         self.pixelScale = pixelScale
         pixelatedCache = nil
+        blurredCache = nil
         selectionRect = nil
         selectedIndex = nil
         history = []
@@ -287,6 +350,7 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
         commitText()
         self.image = image
         pixelatedCache = nil
+        blurredCache = nil
         selectionRect = selectionRect.map { $0.offsetBy(dx: -shift.x, dy: -shift.y).intersection(CGRect(origin: .zero, size: imageSize)) }
             .flatMap { $0.width >= 3 && $0.height >= 3 ? $0 : nil }
         if shift != .zero {
@@ -328,8 +392,11 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
 
     // MARK: 색·굵기 (고른 표시가 있으면 그 표시에도 적용)
 
-    func applyColor(_ index: Int) {
-        color = Self.palette[index]
+    func applyColor(_ index: Int) { applyColor(Self.palette[index]) }
+
+    /// 팔레트에 없는 색(색 고르기 창에서 고른 색)도 쓸 수 있다.
+    func applyColor(_ newColor: NSColor) {
+        color = newColor
         if let i = selectedIndex, annotations.indices.contains(i), annotations[i].color != nil {
             mutate { $0[i] = $0[i].withColor(color) }
         }
@@ -387,6 +454,29 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
     private func toView(_ p: CGPoint) -> CGPoint {
         let o = imageOffset, s = viewScale
         return CGPoint(x: p.x * s + o.x, y: p.y * s + o.y)
+    }
+
+    /// 부분 선택한 영역으로 이미지를 자른다(탭 창). 그린 표시는 같은 자리에 남는다. 되돌릴 수 없다.
+    @discardableResult
+    func cropToSelection() -> Bool {
+        guard let rect = selectionRect, let cropped = image.cropping(to: pixelRect(rect)) else { return false }
+        commitText()
+        image = cropped
+        pixelatedCache = nil
+        blurredCache = nil
+        selectionRect = nil
+        selectedIndex = nil
+        history = []
+        future = []
+        annotations = annotations.map { $0.offsetBy(dx: -rect.minX, dy: -rect.minY) }
+        isDirty = true
+        zoom = nil
+        return true
+    }
+
+    /// 다음 번호 스티커에 쓸 숫자.
+    private var nextStepNumber: Int {
+        (annotations.compactMap { if case let .step(_, n, _, _) = $0 { return n } else { return nil } }.max() ?? 0) + 1
     }
 
     // MARK: 확대·축소 (탭 창)
@@ -486,6 +576,29 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
             path.lineWidth = width
             color.setStroke()
             path.stroke()
+        case let .line(from, to, color, width):
+            let path = NSBezierPath()
+            path.move(to: from)
+            path.line(to: to)
+            path.lineWidth = width
+            path.lineCapStyle = .round
+            color.setStroke()
+            path.stroke()
+        case let .ellipse(rect, color, width):
+            let path = NSBezierPath(ovalIn: rect)
+            path.lineWidth = width
+            color.setStroke()
+            path.stroke()
+        case let .step(center, number, color, level):
+            Self.drawStep(center: center, number: number, color: color, level: level)
+        case let .blur(rect):
+            guard let blurred else { return }
+            NSGraphicsContext.saveGraphicsState()
+            NSBezierPath(rect: rect).addClip()
+            let full = CGRect(origin: .zero, size: imageSize)
+            NSImage(cgImage: blurred, size: full.size)
+                .draw(in: full, from: .zero, operation: .copy, fraction: 1, respectFlipped: true, hints: nil)
+            NSGraphicsContext.restoreGraphicsState()
         case let .pen(points, color, width):
             Self.drawPen(points, color: color, width: width)
         case let .text(string, origin, color, size):
@@ -510,6 +623,29 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
         shadow.shadowBlurRadius = 3
         shadow.shadowOffset = .zero
         return [.font: NSFont.boldSystemFont(ofSize: size), .foregroundColor: color, .shadow: shadow]
+    }
+
+    /// 색 동그라미 안에 흰 숫자. 밝은 색이면 숫자를 검게 한다.
+    private static func drawStep(center: CGPoint, number: Int, color: NSColor, level: Int) {
+        let d = stepSizes[min(max(level, 0), 2)]
+        let circle = CGRect(x: center.x - d / 2, y: center.y - d / 2, width: d, height: d)
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.35)
+        shadow.shadowBlurRadius = 2
+        shadow.shadowOffset = NSSize(width: 0, height: -1)
+        NSGraphicsContext.saveGraphicsState()
+        shadow.set()
+        color.setFill()
+        NSBezierPath(ovalIn: circle).fill()
+        NSGraphicsContext.restoreGraphicsState()
+        let rgb = color.usingColorSpace(.sRGB)
+        let light = (rgb.map { 0.299 * $0.redComponent + 0.587 * $0.greenComponent + 0.114 * $0.blueComponent } ?? 0) > 0.7
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: d * 0.55, weight: .bold), .foregroundColor: light ? NSColor.black : NSColor.white,
+        ]
+        let text = "\(number)" as NSString
+        let size = text.size(withAttributes: attributes)
+        text.draw(at: CGPoint(x: center.x - size.width / 2, y: center.y - size.height / 2), withAttributes: attributes)
     }
 
     /// 점 사이를 중간점 곡선으로 이어 손떨림을 부드럽게 한다.
@@ -572,6 +708,18 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
         return pixelatedCache
     }
 
+    /// 흐리게용으로 이미지 전체를 한 번만 흐리게 해 둔다.
+    private var blurred: CGImage? {
+        if let blurredCache { return blurredCache }
+        let source = CIImage(cgImage: image)
+        guard let filter = CIFilter(name: "CIGaussianBlur") else { return nil }
+        filter.setValue(source.clampedToExtent(), forKey: kCIInputImageKey)
+        filter.setValue(6 * pixelScale, forKey: kCIInputRadiusKey)
+        guard let output = filter.outputImage?.cropped(to: source.extent) else { return nil }
+        blurredCache = CIContext().createCGImage(output, from: source.extent)
+        return blurredCache
+    }
+
     /// 표시를 그려 넣은 원본 해상도 이미지.
     func render() -> CGImage {
         commitText()
@@ -599,7 +747,13 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
         switch annotation {
         case let .arrow(a, b, _, w):
             return CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x - b.x), height: abs(a.y - b.y)).insetBy(dx: -w * 2, dy: -w * 2)
-        case let .rect(r, _, w): return r.insetBy(dx: -w / 2, dy: -w / 2)
+        case let .line(a, b, _, w):
+            return CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x - b.x), height: abs(a.y - b.y)).insetBy(dx: -w, dy: -w)
+        case let .rect(r, _, w), let .ellipse(r, _, w): return r.insetBy(dx: -w / 2, dy: -w / 2)
+        case let .step(c, _, _, level):
+            let d = stepSizes[min(max(level, 0), 2)]
+            return CGRect(x: c.x - d / 2, y: c.y - d / 2, width: d, height: d)
+        case let .blur(r): return r
         case let .pen(points, _, w):
             let xs = points.map(\.x), ys = points.map(\.y)
             guard let minX = xs.min(), let maxX = xs.max(), let minY = ys.min(), let maxY = ys.max() else { return .zero }
@@ -623,8 +777,16 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
         let t = 6 / viewScale
         for (i, annotation) in annotations.enumerated().reversed() {
             switch annotation {
-            case let .arrow(a, b, _, w):
+            case let .arrow(a, b, _, w), let .line(a, b, _, w):
                 if Self.distance(p, toSegment: a, b) <= w / 2 + t { return i }
+            case let .ellipse(r, _, w):
+                // 타원 둘레 근처만 고른다.
+                guard r.width > 0, r.height > 0 else { continue }
+                let nx = (p.x - r.midX) / (r.width / 2), ny = (p.y - r.midY) / (r.height / 2)
+                let distance = abs(hypot(nx, ny) - 1) * min(r.width, r.height) / 2
+                if distance <= w / 2 + t { return i }
+            case .step:
+                if Self.bounds(of: annotation).insetBy(dx: -t, dy: -t).contains(p) { return i }
             case let .rect(r, _, w):
                 let outer = r.insetBy(dx: -w / 2 - t, dy: -w / 2 - t)
                 let inner = r.insetBy(dx: w / 2 + t, dy: w / 2 + t)
@@ -633,7 +795,7 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
                 for (a, b) in zip(points, points.dropFirst()) where Self.distance(p, toSegment: a, b) <= w / 2 + t { return i }
             case .text:
                 if Self.bounds(of: annotation).insetBy(dx: -t, dy: -t).contains(p) { return i }
-            case let .highlight(r, _), let .mosaic(r):
+            case let .highlight(r, _), let .mosaic(r), let .blur(r):
                 if includeAreas && r.contains(p) { return i }
             }
         }
@@ -677,6 +839,11 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
             beginText(at: point, string: "", color: color, size: textSize)
             return
         }
+        if tool == .step {
+            let step = Annotation.step(center: point, number: nextStepNumber, color: color, level: widthLevel)
+            mutate { $0.append(step) }
+            return
+        }
         dragStart = point
         if tool == .pen { draft = .pen([point], color: color, width: lineWidth) }
     }
@@ -710,14 +877,17 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
             }
             return
         }
-        if event.modifierFlags.contains(.shift) { point = Self.constrain(point, from: start, square: tool != .arrow) }
+        if event.modifierFlags.contains(.shift) { point = Self.constrain(point, from: start, square: tool != .arrow && tool != .line) }
         let rect = CGRect(x: min(start.x, point.x), y: min(start.y, point.y), width: abs(point.x - start.x), height: abs(point.y - start.y))
         switch tool {
         case .arrow: draft = .arrow(from: start, to: point, color: color, width: lineWidth)
+        case .line: draft = .line(from: start, to: point, color: color, width: lineWidth)
         case .rect: draft = .rect(rect, color: color, width: lineWidth)
+        case .ellipse: draft = .ellipse(rect, color: color, width: lineWidth)
         case .highlight: draft = .highlight(rect, color: color)
         case .mosaic: draft = .mosaic(rect)
-        case .text, .pen, .select: break
+        case .blur: draft = .blur(rect)
+        case .text, .pen, .select, .step: break
         }
         needsDisplay = true
     }
@@ -755,8 +925,9 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
 
     private func isMeaningful(_ annotation: Annotation) -> Bool {
         switch annotation {
-        case let .arrow(from, to, _, _): return hypot(to.x - from.x, to.y - from.y) > 4
-        case let .rect(r, _, _), let .highlight(r, _), let .mosaic(r): return r.width > 3 && r.height > 3
+        case let .arrow(from, to, _, _), let .line(from, to, _, _): return hypot(to.x - from.x, to.y - from.y) > 4
+        case let .rect(r, _, _), let .ellipse(r, _, _), let .highlight(r, _), let .mosaic(r), let .blur(r): return r.width > 3 && r.height > 3
+        case .step: return true
         case let .pen(points, _, _): return points.count > 1
         case .text: return true
         }
