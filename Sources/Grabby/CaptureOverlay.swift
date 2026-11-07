@@ -9,6 +9,8 @@ struct CaptureResult {
     let displayID: CGDirectDisplayID
     /// 화이트보드 결과는 화면을 찍은 게 아니므로 '마지막 영역'으로 기억하지 않는다.
     var isWhiteboard = false
+    /// 복사하고 탭에 넣은 뒤 파일로도 저장한다(⌘S).
+    var wantsSave = false
 }
 
 /// 멈춘 화면들을 덮어 영역을 고르고, 고른 자리에서 바로 편집하게 한다.
@@ -44,16 +46,16 @@ final class CaptureSession {
         if !window.isKeyWindow { window.makeKey() }
     }
 
-    fileprivate func confirm(_ overlay: OverlayView) {
+    fileprivate func confirm(_ overlay: OverlayView, save: Bool = false) {
         guard let canvas = overlay.canvas, let rect = overlay.selection else { return }
         // 영역 안에서 일부를 다시 골랐으면 그 부분만 복사한다.
         if let part = canvas.selectedImage(), let sub = canvas.selectionRect {
             finish(CaptureResult(image: part, pixelScale: canvas.pixelScale, rect: sub.offsetBy(dx: rect.minX, dy: rect.minY),
-                                 displayID: overlay.shot.displayID, isWhiteboard: isWhiteboard))
+                                 displayID: overlay.shot.displayID, isWhiteboard: isWhiteboard, wantsSave: save))
             return
         }
         finish(CaptureResult(image: canvas.render(), pixelScale: canvas.pixelScale, rect: rect, displayID: overlay.shot.displayID,
-                             isWhiteboard: isWhiteboard))
+                             isWhiteboard: isWhiteboard, wantsSave: save))
     }
 
     fileprivate func cancel() { finish(nil) }
@@ -114,6 +116,7 @@ final class OverlayWindow: NSWindow {
     }
 
     @objc func copy(_ sender: Any?) { session?.confirm(overlay) }
+    @objc func saveDocument(_ sender: Any?) { session?.confirm(overlay, save: true) }
     @objc func undo(_ sender: Any?) { overlay.canvas?.undo() }
     override func cancelOperation(_ sender: Any?) { session?.cancel() }
 }
@@ -258,11 +261,15 @@ final class OverlayView: NSView {
         canvas.tool = .select
         let toolbar = EditToolbar(canvas: canvas, tools: Tool.allCases, actions: [
             .init(symbol: "xmark", title: "취소 (Esc)") { [weak self] in self?.session?.cancel() },
+            .init(symbol: "square.and.arrow.down", title: "파일로 저장 (⌘S) · 복사하고 탭에도 추가") { [weak self] in
+                guard let self else { return }
+                self.session?.confirm(self, save: true)
+            },
             .init(symbol: "checkmark", title: "복사하고 탭에 추가 (↩ 또는 ⌘C)", label: "완료", isPrimary: true) { [weak self] in
                 guard let self else { return }
                 self.session?.confirm(self)
             },
-        ], hint: "안에서 드래그해 일부만 고르기 · 도구로 그리기 · 손잡이·방향키로 영역 조정 · ↩/⌘C 복사 · Esc 취소")
+        ], hint: "안에서 드래그해 일부만 고르기 · 도구로 그리기 · 손잡이·방향키로 영역 조정 · ↩/⌘C 복사 · ⌘S 저장 · Esc 취소")
         addSubview(toolbar)
         self.toolbar = toolbar
         let handles = HandlesView()

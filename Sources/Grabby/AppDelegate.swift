@@ -117,6 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         edit.addItem(NSMenuItem(title: "붙이기", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
         edit.addItem(NSMenuItem(title: "전체 선택", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
         edit.addItem(NSMenuItem(title: "창 닫기", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"))
+        edit.addItem(NSMenuItem(title: "저장…", action: #selector(NSDocument.save(_:)), keyEquivalent: "s"))
         editItem.submenu = edit
         main.addItem(editItem)
         NSApp.mainMenu = main
@@ -142,8 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NSApp.activate(ignoringOtherApps: true)
                 session = CaptureSession(shots: shots) { [weak self] result in
                     self?.session = nil
-                    if let result { self?.save(result) }
-                    self?.returnToPreviousApp()
+                    self?.finishCapture(result)
                 }
             } catch {
                 show(error)
@@ -166,8 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.activate(ignoringOtherApps: true)
             session = CaptureSession(shots: shots, whiteboard: true) { [weak self] result in
                 self?.session = nil
-                if let result { self?.save(result) }
-                self?.returnToPreviousApp()
+                self?.finishCapture(result)
             }
         }
     }
@@ -207,6 +206,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Toast.show("복사했어요 · ⌘V로 붙여 넣기", image: CaptureStore.shared.thumbnail(for: item))
         if library == nil { library = LibraryWindowController() }
         library?.showWithoutFocus()
+    }
+
+    /// 캡처·화이트보드를 마친 뒤: 복사하고 탭에 넣고, ⌘S였으면 저장 창을 띄운 다음 원래 앱으로 돌아간다.
+    private func finishCapture(_ result: CaptureResult?) {
+        guard let result else { returnToPreviousApp(); return }
+        save(result)
+        if result.wantsSave {
+            ImageSaver.save(result.image, scale: result.pixelScale) { [weak self] in self?.returnToPreviousApp() }
+        } else {
+            returnToPreviousApp()
+        }
     }
 
     private func rememberFrontApp() {

@@ -94,6 +94,7 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         canvas.tool = .select
         let toolbar = EditToolbar(canvas: canvas, tools: Tool.allCases, actions: [
             .init(symbol: "doc.on.doc", title: "복사 (⌘C) · 고른 부분이 있으면 그 부분만") { [weak self] in self?.copyCurrent() },
+            .init(symbol: "square.and.arrow.down", title: "파일로 저장 (⌘S) · 고른 부분이 있으면 그 부분만") { [weak self] in self?.saveCurrent() },
             .init(symbol: "folder", title: "Finder에서 보기") { [weak self] in self?.revealCurrent() },
             .init(symbol: "trash", title: "삭제 (⌫)") { [weak self] in self?.deleteCurrent() },
         ])
@@ -243,6 +244,16 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         Toast.show("복사했어요", image: store.thumbnail(for: item))
     }
 
+    /// 지금 탭을 파일로 저장한다. 그린 표시는 합치고, 고른 부분이 있으면 그 부분만 저장한다.
+    func saveCurrent() {
+        guard let item = selectedItem else { return }
+        let image = canvas.selectedImage() ?? (item.id == shownID && canvas.hasEdits ? canvas.render() : store.image(for: item))
+        guard let image else { return }
+        ImageSaver.save(image, scale: item.scale, date: item.date) { [weak self] in
+            self?.window?.makeKeyAndOrderFront(nil)
+        }
+    }
+
     private func revealCurrent() {
         guard let item = selectedItem else { return }
         NSWorkspace.shared.activateFileViewerSelecting([store.url(for: item)])
@@ -299,6 +310,7 @@ final class LibraryWindow: NSWindow {
     weak var library: LibraryWindowController?
 
     @objc func copy(_ sender: Any?) { library?.copyCurrent() }
+    @objc func saveDocument(_ sender: Any?) { library?.saveCurrent() }
     @objc func undo(_ sender: Any?) { library?.undoAnnotation() }
 
     override func keyDown(with event: NSEvent) {
