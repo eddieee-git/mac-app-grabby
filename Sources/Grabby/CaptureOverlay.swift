@@ -75,6 +75,12 @@ final class OverlayWindow: NSWindow {
             session?.cancel()
         case kVK_Return, kVK_ANSI_KeypadEnter:
             session?.confirm(overlay)
+        case kVK_LeftArrow, kVK_RightArrow, kVK_UpArrow, kVK_DownArrow:
+            let step: CGFloat = event.modifierFlags.contains(.shift) ? 10 : 1
+            let code = Int(event.keyCode)
+            let dx = code == kVK_LeftArrow ? -step : code == kVK_RightArrow ? step : 0
+            let dy = code == kVK_UpArrow ? -step : code == kVK_DownArrow ? step : 0
+            overlay.nudge(dx: dx, dy: dy, resize: event.modifierFlags.contains(.option))
         default:
             if let canvas, event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
                let tool = Tool.forKeyCode(event.keyCode) {
@@ -97,7 +103,10 @@ final class OverlayView: NSView {
     private(set) var selection: CGRect?
     private(set) var canvas: AnnotationCanvas?
     private var toolbar: EditToolbar?
+    private var handles: HandlesView?
     private var dragStart: CGPoint?
+    /// 손잡이를 끌어 영역 크기를 조정하는 중이면 그 손잡이.
+    private var resizing: Handle?
 
     init(shot: ScreenShot) {
         self.shot = shot
@@ -113,15 +122,34 @@ final class OverlayView: NSView {
     func reset() {
         canvas?.removeFromSuperview()
         toolbar?.removeFromSuperview()
+        handles?.removeFromSuperview()
         canvas = nil
         toolbar = nil
+        handles = nil
+        resizing = nil
         selection = nil
         dragStart = nil
         needsDisplay = true
+        window?.invalidateCursorRects(for: self)
     }
 
+    /// 영역을 고르는 동안은 십자, 편집 중에는 영역 밖에서 일반 화살표를 보여 준다(영역 안은 캔버스가 정한다).
     override func resetCursorRects() {
-        addCursorRect(bounds, cursor: .crosshair)
+        addCursorRect(bounds, cursor: canvas == nil ? .crosshair : .arrow)
+        guard canvas != nil, let selection else { return }
+        for handle in Handle.allCases {
+            let cursor: NSCursor = handle.x == 0 ? .resizeUpDown : handle.y == 0 ? .resizeLeftRight : .crosshair
+            addCursorRect(handle.hitRect(in: selection), cursor: cursor)
+        }
+    }
+
+    /// 손잡이는 캔버스 위에 걸쳐 있으므로 캔버스보다 먼저 클릭을 받는다.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        if canvas != nil, let selection, let superview {
+            let p = convert(point, from: superview)
+            if Handle.allCases.contains(where: { $0.hitRect(in: selection).contains(p) }) { return self }
+        }
+        return super.hitTest(point)
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -139,7 +167,7 @@ final class OverlayView: NSView {
         let border = NSBezierPath(rect: selection.insetBy(dx: -0.5, dy: -0.5))
         border.lineWidth = 1
         border.stroke()
-        if canvas == nil { drawSizeLabel(for: selection) }
+        if canvas == nil || resizing != nil { drawSizeLabel(for: selection) }
     }
 
     private func drawSizeLabel(for rect: CGRect) {
@@ -158,6 +186,11 @@ final class OverlayView: NSView {
     // MARK: 영역 선택
 
     override func mouseDown(with event: NSEvent) {
+        let p = convert(event.locationInWindow, from: nil)
+        if canvas != nil, let selection, let handle = Handle.allCases.first(where: { $0.hitRect(in: selection).contains(p) }) {
+            resizing = handle
+            return
+        }
         // 표시를 그린 뒤에는 바깥을 눌러도 선택을 버리지 않는다.
         if let canvas, canvas.hasEdits { return }
         reset()
@@ -166,14 +199,23 @@ final class OverlayView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let start = dragStart else { return }
         let p = convert(event.locationInWindow, from: nil)
+        if let resizing, let selection {
+            applySelection(resizing.resize(selection, to: p))
+            return
+        }
+        guard let start = dragStart else { return }
         let x = min(max(p.x, 0), bounds.width), y = min(max(p.y, 0), bounds.height)
         selection = CGRect(x: min(start.x, x), y: min(start.y, y), width: abs(x - start.x), height: abs(y - start.y)).integral
         needsDisplay = true
     }
 
     override func mouseUp(with event: NSEvent) {
+        if resizing != nil {
+            resizing = nil
+            needsDisplay = true
+            return
+        }
         defer { dragStart = nil }
         guard dragStart != nil, let selection, selection.width >= 4, selection.height >= 4 else {
             reset()
@@ -191,23 +233,128 @@ final class OverlayView: NSView {
 
         let toolbar = EditToolbar(canvas: canvas, actions: [
             .init(symbol: "xmark", title: "취소 (Esc)") { [weak self] in self?.session?.cancel() },
-            .init(symbol: "checkmark", title: "복사하고 보관 (↩ 또는 ⌘C)") { [weak self] in
+            .init(symbol: "checkmark", title: "복사하고 탭에 추가 (↩ 또는 ⌘C)", label: "완료", isPrimary: true) { [weak self] in
                 guard let self else { return }
                 self.session?.confirm(self)
             },
-        ])
+        ], hint: "안에 드래그해서 표시 · 손잡이·방향키로 영역 조정(⌥ 크기, ⇧ 10px) · ↩ 완료 · Esc 취소")
+        addSubview(toolbar)
+        self.toolbar = toolbar
+        let handles = HandlesView()
+        addSubview(handles)
+        self.handles = handles
+        layoutChrome()
+        window?.makeFirstResponder(self)
+        window?.invalidateCursorRects(for: self)
+        needsDisplay = true
+    }
+
+    /// 편집 중에 영역을 바꾼다. 그린 표시는 화면에서 같은 자리에 남는다.
+    func applySelection(_ rect: CGRect) {
+        guard let canvas, let old = selection else { return }
+        let rect = rect.intersection(bounds).integral
+        guard rect.width >= 4, rect.height >= 4, rect != old, let image = shot.crop(rect) else { return }
+        selection = rect
+        canvas.frame = rect
+        canvas.recrop(image, originShift: CGPoint(x: rect.minX - old.minX, y: rect.minY - old.minY))
+        layoutChrome()
+        window?.invalidateCursorRects(for: self)
+        needsDisplay = true
+    }
+
+    /// 방향키: 영역을 옮긴다. ⌥를 누르면 오른쪽·아래 변을 움직여 크기를 바꾼다.
+    func nudge(dx: CGFloat, dy: CGFloat, resize: Bool) {
+        guard canvas != nil, let selection else { return }
+        if resize {
+            applySelection(CGRect(x: selection.minX, y: selection.minY, width: selection.width + dx, height: selection.height + dy))
+        } else {
+            var moved = selection.offsetBy(dx: dx, dy: dy)
+            moved.origin.x = min(max(moved.minX, 0), bounds.width - moved.width)
+            moved.origin.y = min(max(moved.minY, 0), bounds.height - moved.height)
+            applySelection(moved)
+        }
+    }
+
+    /// 손잡이와 도구 막대를 영역에 맞춰 놓는다.
+    private func layoutChrome() {
+        guard let rect = selection else { return }
+        handles?.frame = rect.insetBy(dx: -Handle.size, dy: -Handle.size)
+        handles?.needsDisplay = true
+        guard let toolbar else { return }
         // 선택 영역 아래 오른쪽에 붙이고, 자리가 없으면 위, 그래도 없으면 안쪽 아래에 둔다.
-        let size = toolbar.frame.size, gap: CGFloat = 8
+        let size = toolbar.frame.size, gap: CGFloat = 10
         var origin = CGPoint(x: rect.maxX - size.width, y: rect.maxY + gap)
         if origin.y + size.height > bounds.height {
             origin.y = rect.minY - gap - size.height
             if origin.y < 0 { origin.y = rect.maxY - gap - size.height }
         }
         origin.x = min(max(origin.x, gap), bounds.width - size.width - gap)
-        toolbar.frame = CGRect(origin: origin, size: size)
-        addSubview(toolbar)
-        self.toolbar = toolbar
-        window?.makeFirstResponder(self)
-        needsDisplay = true
+        toolbar.setFrameOrigin(origin)
+    }
+}
+
+/// 영역 테두리의 손잡이 8개. x, y는 -1(왼쪽·위), 0(가운데), 1(오른쪽·아래).
+enum Handle: CaseIterable {
+    case topLeft, top, topRight, right, bottomRight, bottom, bottomLeft, left
+
+    static let size: CGFloat = 8
+
+    var x: Int {
+        switch self {
+        case .topLeft, .left, .bottomLeft: return -1
+        case .top, .bottom: return 0
+        case .topRight, .right, .bottomRight: return 1
+        }
+    }
+
+    var y: Int {
+        switch self {
+        case .topLeft, .top, .topRight: return -1
+        case .left, .right: return 0
+        case .bottomLeft, .bottom, .bottomRight: return 1
+        }
+    }
+
+    func center(in r: CGRect) -> CGPoint {
+        CGPoint(x: x < 0 ? r.minX : x > 0 ? r.maxX : r.midX, y: y < 0 ? r.minY : y > 0 ? r.maxY : r.midY)
+    }
+
+    /// 잡기 쉽게 그려지는 크기보다 넓게 받는다.
+    func hitRect(in r: CGRect) -> CGRect {
+        let c = center(in: r), hit: CGFloat = 16
+        return CGRect(x: c.x - hit / 2, y: c.y - hit / 2, width: hit, height: hit)
+    }
+
+    func resize(_ r: CGRect, to p: CGPoint) -> CGRect {
+        let minSide: CGFloat = 8
+        var minX = r.minX, maxX = r.maxX, minY = r.minY, maxY = r.maxY
+        if x < 0 { minX = min(p.x, maxX - minSide) }
+        if x > 0 { maxX = max(p.x, minX + minSide) }
+        if y < 0 { minY = min(p.y, maxY - minSide) }
+        if y > 0 { maxY = max(p.y, minY + minSide) }
+        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+}
+
+/// 캔버스 위에 테두리와 손잡이를 그린다. 클릭은 받지 않는다(OverlayView가 받는다).
+final class HandlesView: NSView {
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let inner = bounds.insetBy(dx: Handle.size, dy: Handle.size)
+        NSColor.white.withAlphaComponent(0.9).setStroke()
+        let border = NSBezierPath(rect: inner.insetBy(dx: -0.5, dy: -0.5))
+        border.lineWidth = 1
+        border.stroke()
+        for handle in Handle.allCases {
+            let c = handle.center(in: inner), s = Handle.size
+            let box = NSBezierPath(roundedRect: CGRect(x: c.x - s / 2, y: c.y - s / 2, width: s, height: s), xRadius: 2, yRadius: 2)
+            NSColor.white.setFill()
+            box.fill()
+            NSColor.black.withAlphaComponent(0.5).setStroke()
+            box.lineWidth = 1
+            box.stroke()
+        }
     }
 }

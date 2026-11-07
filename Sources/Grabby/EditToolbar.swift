@@ -5,6 +5,10 @@ final class EditToolbar: NSVisualEffectView {
     struct Action {
         let symbol: String
         let title: String
+        /// 있으면 아이콘 옆에 글자를 함께 보여 준다.
+        var label: String? = nil
+        /// 강조 색으로 눈에 띄게 보여 준다(완료 버튼).
+        var isPrimary = false
         let handler: () -> Void
     }
 
@@ -13,7 +17,8 @@ final class EditToolbar: NSVisualEffectView {
     private let colors: NSSegmentedControl
     private var actions: [Action] = []
 
-    init(canvas: AnnotationCanvas, actions: [Action]) {
+    /// `hint`가 있으면 버튼 줄 아래에 작은 안내 문구를 보여 준다.
+    init(canvas: AnnotationCanvas, actions: [Action], hint: String? = nil) {
         self.canvas = canvas
         self.actions = actions
         tools = NSSegmentedControl(images: Tool.allCases.map { Self.symbol($0.symbol, $0.title) },
@@ -39,11 +44,34 @@ final class EditToolbar: NSVisualEffectView {
         for (index, action) in actions.enumerated() {
             let b = button(symbol: action.symbol, title: action.title, action: #selector(actionTapped(_:)))
             b.tag = index
+            if let label = action.label {
+                b.title = label
+                b.imagePosition = .imageLeading
+            }
+            if action.isPrimary {
+                b.bezelStyle = .push
+                b.bezelColor = .controlAccentColor
+                b.contentTintColor = .white
+                b.attributedTitle = NSAttributedString(string: b.title, attributes: [
+                    .foregroundColor: NSColor.white, .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+                ])
+            }
             views.append(b)
         }
-        let stack = NSStackView(views: views)
-        stack.spacing = 8
-        stack.setCustomSpacing(4, after: colors)
+        let row = NSStackView(views: views)
+        row.spacing = 8
+        row.setCustomSpacing(4, after: colors)
+        var rows: [NSView] = [row]
+        if let hint {
+            let label = NSTextField(labelWithString: hint)
+            label.font = .systemFont(ofSize: 11)
+            label.textColor = .secondaryLabelColor
+            rows.append(label)
+        }
+        let stack = NSStackView(views: rows)
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 4
         stack.edgeInsets = NSEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)

@@ -47,6 +47,19 @@ enum Annotation {
     case mosaic(CGRect)
 }
 
+extension Annotation {
+    func offsetBy(dx: CGFloat, dy: CGFloat) -> Annotation {
+        func move(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x + dx, y: p.y + dy) }
+        switch self {
+        case let .arrow(from, to, color): return .arrow(from: move(from), to: move(to), color: color)
+        case let .rect(r, color): return .rect(r.offsetBy(dx: dx, dy: dy), color: color)
+        case let .text(string, origin, color): return .text(string, origin: move(origin), color: color)
+        case let .highlight(r, color): return .highlight(r.offsetBy(dx: dx, dy: dy), color: color)
+        case let .mosaic(r): return .mosaic(r.offsetBy(dx: dx, dy: dy))
+        }
+    }
+}
+
 /// 이미지를 보여 주고 그 위에 표시를 그리는 뷰. 캡처 직후 화면 위 편집과 보관함 편집에서 함께 쓴다.
 final class AnnotationCanvas: NSView, NSTextFieldDelegate {
     static let palette: [NSColor] = [.systemRed, .systemYellow, .systemGreen, .systemBlue, .black, .white]
@@ -89,6 +102,17 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
         self.pixelScale = pixelScale
         pixelatedCache = nil
         annotations = []
+        needsDisplay = true
+    }
+
+    /// 영역 크기를 조정할 때 쓴다. 그린 표시는 유지하고, 영역의 왼쪽 위가 옮겨진 만큼 반대로 옮긴다.
+    func recrop(_ image: CGImage, originShift shift: CGPoint) {
+        commitText()
+        self.image = image
+        pixelatedCache = nil
+        if shift != .zero {
+            annotations = annotations.map { $0.offsetBy(dx: -shift.x, dy: -shift.y) }
+        }
         needsDisplay = true
     }
 
