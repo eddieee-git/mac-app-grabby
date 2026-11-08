@@ -43,6 +43,7 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         window.delegate = self
         window.library = self
         build()
+        window.initialFirstResponder = canvas
         setPinned(UserDefaults.standard.bool(forKey: pinKey))
         NotificationCenter.default.addObserver(self, selector: #selector(storeChanged), name: CaptureStore.didChange, object: nil)
         knownNewest = store.items.first?.id
@@ -60,6 +61,12 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
+        focusCanvas()
+    }
+
+    /// 도구 단축키(V, A, R…)가 검색 칸이 아니라 캔버스로 가게 한다.
+    private func focusCanvas() {
+        window?.makeFirstResponder(canvas)
     }
 
     /// 다른 앱의 포커스는 그대로 두고 창만 앞에 띄운다(캡처 직후).
@@ -390,6 +397,8 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
 
     @objc private func searchChanged() {
         query = searchField.stringValue
+        // 검색을 지우면 다시 캔버스로 돌아가 도구 단축키를 쓸 수 있게 한다.
+        if query.isEmpty { DispatchQueue.main.async { [weak self] in self?.focusCanvas() } }
         reloadTabs()
         // 찾은 탭이 있는데 보던 탭이 빠졌으면 가장 최근 것을 보여 준다.
         if !tabs.contains(where: { $0.item.id == selectedID }), let last = tabs.last { select(last.item.id) }
@@ -404,9 +413,11 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
             Toast.show(L("부분 선택(V)으로 남길 영역을 먼저 고르세요"))
             return
         }
-        canvas.cropToSelection()
-        layoutCanvas()
-        if let item = selectedItem { persist(item) }
+        guard canvas.cropToSelection(), let item = selectedItem else { return }
+        persist(item)
+        // 저장한 결과를 다시 불러와 보여 준다.
+        shownID = nil
+        showSelected()
     }
 
     @objc private func noteAction() {

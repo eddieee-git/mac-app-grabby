@@ -123,6 +123,7 @@ final class OverlayWindow: NSPanel {
     override var canBecomeMain: Bool { false }
 
     override func keyDown(with event: NSEvent) {
+        if handleCommand(event) { return }
         let canvas = overlay.canvas
         let plain = event.modifierFlags.intersection([.command, .control, .option]).isEmpty
         switch Int(event.keyCode) {
@@ -158,8 +159,13 @@ final class OverlayWindow: NSPanel {
 
     /// 앱이 앞에 있지 않아도 동작하도록 ⌘ 단축키를 직접 받는다. 글자를 입력하는 중에는 입력 칸에 넘긴다.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        handleCommand(event) || super.performKeyEquivalent(with: event)
+    }
+
+    /// ⌘ 조합을 처리했으면 true. 키 이벤트가 performKeyEquivalent를 거치지 않고 keyDown으로 오는 경우에도 쓴다.
+    private func handleCommand(_ event: NSEvent) -> Bool {
         let mods = event.modifierFlags.intersection([.command, .shift, .option, .control])
-        guard mods.contains(.command), overlay.canvas?.isEditingText != true else { return super.performKeyEquivalent(with: event) }
+        guard mods.contains(.command), overlay.canvas?.isEditingText != true else { return false }
         switch Int(event.keyCode) {
         case kVK_ANSI_C where mods == .command: session?.confirm(overlay, .copy)
         case kVK_ANSI_S where mods == .command: session?.confirm(overlay, .save)
@@ -167,7 +173,7 @@ final class OverlayWindow: NSPanel {
         case kVK_ANSI_T where mods == .command: session?.confirm(overlay, .ocr)
         case kVK_ANSI_B where mods == .command: session?.confirm(overlay, .beautify)
         case kVK_ANSI_Z: mods.contains(.shift) ? overlay.canvas?.redo() : overlay.canvas?.undo()
-        default: return super.performKeyEquivalent(with: event)
+        default: return false
         }
         return true
     }

@@ -316,6 +316,7 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
     required init?(coder: NSCoder) { fatalError() }
 
     override var isFlipped: Bool { true }
+    override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     var imageSize: CGSize { CGSize(width: CGFloat(image.width) / pixelScale, height: CGFloat(image.height) / pixelScale) }
@@ -858,8 +859,13 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
                 isMovingRecorded = true
                 isDirty = true
             }
+            // 표시가 이미지 밖으로 나가지 않게 옮기는 거리를 제한한다.
+            let b = Self.bounds(of: original), size = imageSize
+            var dx = point.x - start.x, dy = point.y - start.y
+            if b.width <= size.width { dx = min(max(dx, -b.minX), size.width - b.maxX) }
+            if b.height <= size.height { dy = min(max(dy, -b.minY), size.height - b.maxY) }
             var next = annotations
-            next[i] = original.offsetBy(dx: point.x - start.x, dy: point.y - start.y)
+            next[i] = original.offsetBy(dx: dx, dy: dy)
             annotations = next
             return
         }
