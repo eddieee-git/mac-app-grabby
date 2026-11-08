@@ -70,7 +70,15 @@ extension ScreenShot {
 /// 화면에 떠 있는 일반 창들의 영역. 클릭 한 번으로 창 하나를 고를 때 쓴다.
 enum WindowList {
     /// 앞에 있는 창부터, 지정한 화면 왼쪽 위 기준 포인트 좌표로 돌려준다. Grabby 자신의 창은 뺀다.
-    static func rects(on displayID: CGDirectDisplayID) -> [CGRect] {
+    static func rects(on displayID: CGDirectDisplayID) -> [CGRect] { windows(on: displayID).map(\.rect) }
+
+    /// 창 영역과 그 창의 앱 이름.
+    struct ScreenWindow: Equatable {
+        let rect: CGRect
+        let name: String
+    }
+
+    static func windows(on displayID: CGDirectDisplayID) -> [ScreenWindow] {
         guard let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
             return []
         }
@@ -86,7 +94,8 @@ enum WindowList {
                   rect.width >= 40, rect.height >= 40 else { return nil }
             let visible = rect.intersection(screen)
             guard !visible.isNull, visible.width >= 40, visible.height >= 40 else { return nil }
-            return visible.offsetBy(dx: -screen.minX, dy: -screen.minY).integral
+            let name = window[kCGWindowOwnerName as String] as? String ?? ""
+            return ScreenWindow(rect: visible.offsetBy(dx: -screen.minX, dy: -screen.minY).integral, name: name)
         }
     }
 }

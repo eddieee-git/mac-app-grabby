@@ -140,6 +140,7 @@ enum Localization {
         "⌘, ⌃, ⌥ 중 하나와 함께 누르세요.": "Press together with ⌘, ⌃ or ⌥.",
         "%@에서 쓰는 단축키예요.": "Already used by %@.",
         // 새 기능
+        "캡처할 창을 클릭하세요 · 드래그하면 영역 선택 · Esc 취소": "Click a window to capture · Drag to select an area · Esc to cancel",
         "앞에 있는 창 캡처": "Capture Front Window",
         "두 줄": "Two rows",
         "한 줄": "One row",

@@ -63,8 +63,12 @@ final class CaptureSession {
         case .fullScreen:
             overlay.presentFullScreen()
         case let .window(rect):
+            // 창 고르기: 모든 화면에서 마우스 아래 창을 캡처 영역처럼 보여 주고, 처음에는 앞에 있던 창을 보여 준다.
+            for window in windows { window.overlay.pickWindows = true }
+            // 가운데가 다른 창에 가려 있어도 앞에 있던 창 그대로를 보여 준다.
             let display = CGDisplayBounds(overlay.shot.displayID)
-            overlay.preselect(rect.offsetBy(dx: -display.minX, dy: -display.minY), tool: AppSettings.shared.captureTool)
+            let name = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
+            overlay.highlightWindow(rect.offsetBy(dx: -display.minX, dy: -display.minY), name: name)
         case .whiteboard:
             let size = overlay.bounds.size
             let board = CGSize(width: min(1200, size.width * 0.8), height: min(800, size.height * 0.75))
@@ -211,8 +215,12 @@ final class OverlayView: NSView {
     /// 손잡이를 끌어 영역 크기를 조정하는 중이면 그 손잡이.
     private var resizing: Handle?
     /// 마우스 아래의 창. 드래그하지 않고 클릭하면 이 창 영역을 고른다.
-    private var hoveredWindow: CGRect?
-    private var windowRects: [CGRect] = []
+    private var hoveredWindow: CGRect? { hovered?.rect }
+    private var hovered: WindowList.ScreenWindow?
+    private var screenWindows: [WindowList.ScreenWindow] = []
+    private var windowRects: [CGRect] { screenWindows.map(\.rect) }
+    /// 창 고르기(⌃⌘4): 돋보기 없이 창을 캡처 영역처럼 강조하고 안내를 띄운다. 드래그하면 영역 선택도 된다.
+    var pickWindows = false { didSet { loupe.isHidden = true; needsDisplay = true } }
     private let loupe = LoupeView()
     /// 전체 화면 캡처: 화면 전체를 조금 줄여 가운데에 보여 준다. 영역 손잡이는 쓰지 않는다.
     private var isPreview = false
@@ -237,7 +245,7 @@ final class OverlayView: NSView {
         self.blank = blank
         super.init(frame: CGRect(origin: .zero, size: shot.screen.frame.size))
         wantsLayer = true
-        if !blank { windowRects = WindowList.rects(on: shot.displayID) }
+        if !blank { screenWindows = WindowList.windows(on: shot.displayID) }
         loupe.isHidden = true
         addSubview(loupe)
         addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .activeAlways, .inVisibleRect, .mouseEnteredAndExited],
@@ -300,17 +308,19 @@ final class OverlayView: NSView {
         let dim = NSBezierPath(rect: bounds)
         if let hole { dim.append(NSBezierPath(rect: hole)) }
         dim.windingRule = .evenOdd
-        NSColor.black.withAlphaComponent(0.35).setFill()
+        // 창 고르기에서는 바깥을 더 어둡게 해서 고를 창이 캡처 영역처럼 보이게 한다.
+        NSColor.black.withAlphaComponent(pickWindows && selection == nil ? 0.5 : 0.35).setFill()
         dim.fill()
 
-        if selection == nil, dragStart == nil, let hoveredWindow {
+        if selection == nil, dragStart == nil, let hovered {
             NSColor.controlAccentColor.setStroke()
-            let border = NSBezierPath(rect: hoveredWindow.insetBy(dx: 1, dy: 1))
-            border.lineWidth = 2
+            let border = NSBezierPath(rect: hovered.rect.insetBy(dx: pickWindows ? 1.5 : 1, dy: pickWindows ? 1.5 : 1))
+            border.lineWidth = pickWindows ? 3 : 2
             border.stroke()
-            drawSizeLabel(for: hoveredWindow)
-            return
+            drawSizeLabel(for: hovered.rect, name: hovered.name)
         }
+        if pickWindows, selection == nil, dragStart == nil { drawGuide() }
+        if selection == nil, dragStart == nil, hovered != nil { return }
         guard let selection else { return }
         NSColor.white.withAlphaComponent(0.9).setStroke()
         let border = NSBezierPath(rect: selection.insetBy(dx: -0.5, dy: -0.5))
@@ -319,8 +329,20 @@ final class OverlayView: NSView {
         if canvas == nil || resizing != nil { drawSizeLabel(for: selection) }
     }
 
-    private func drawSizeLabel(for rect: CGRect) {
-        let text = "\(Int(rect.width * shot.scale)) × \(Int(rect.height * shot.scale))" as NSString
+    /// 화면 위쪽 가운데에 창 고르기 안내를 띄운다.
+    private func drawGuide() {
+        let text = L("캡처할 창을 클릭하세요 · 드래그하면 영역 선택 · Esc 취소") as NSString
+        let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 14, weight: .medium), .foregroundColor: NSColor.white]
+        let size = text.size(withAttributes: attributes)
+        let box = CGRect(x: ((bounds.width - size.width) / 2 - 18).rounded(), y: 60, width: size.width + 36, height: size.height + 18)
+        NSColor.black.withAlphaComponent(0.75).setFill()
+        NSBezierPath(roundedRect: box, xRadius: box.height / 2, yRadius: box.height / 2).fill()
+        text.draw(at: CGPoint(x: box.minX + 18, y: box.minY + 9), withAttributes: attributes)
+    }
+
+    private func drawSizeLabel(for rect: CGRect, name: String? = nil) {
+        let dims = "\(Int(rect.width * shot.scale)) × \(Int(rect.height * shot.scale))"
+        let text = (name.map { $0.isEmpty ? dims : "\($0) · \(dims)" } ?? dims) as NSString
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium), .foregroundColor: NSColor.white,
         ]
@@ -347,9 +369,9 @@ final class OverlayView: NSView {
         guard let canvas else {
             NSCursor.crosshair.set()
             showLoupe(at: p)
-            let window = dragStart == nil ? windowRects.first { $0.contains(p) } : nil
-            if window != hoveredWindow {
-                hoveredWindow = window
+            let window = dragStart == nil ? screenWindows.first { $0.rect.contains(p) } : nil
+            if window != hovered {
+                hovered = window
                 needsDisplay = true
             }
             return
@@ -364,7 +386,16 @@ final class OverlayView: NSView {
         }
     }
 
+    /// 지정한 창을 강조한다(창 고르기를 시작할 때 앞에 있던 창). 마우스를 움직이면 마우스 아래 창으로 바뀐다.
+    func highlightWindow(_ rect: CGRect, name: String) {
+        let visible = rect.intersection(bounds).integral
+        guard !visible.isNull, visible.width >= 4, visible.height >= 4 else { return }
+        hovered = WindowList.ScreenWindow(rect: visible, name: name)
+        needsDisplay = true
+    }
+
     private func showLoupe(at p: CGPoint) {
+        guard !pickWindows else { return }
         loupe.isHidden = false
         loupe.update(shot: shot, point: p)
         let size = loupe.frame.size, gap: CGFloat = 24
@@ -435,7 +466,7 @@ final class OverlayView: NSView {
     private func beginEditing(_ rect: CGRect, frame: CGRect? = nil) {
         guard let image = content(for: rect) else { reset(); return }
         loupe.isHidden = true
-        hoveredWindow = nil
+        hovered = nil
         let canvas = AnnotationCanvas(image: image, pixelScale: shot.scale)
         canvas.frame = frame ?? rect
         addSubview(canvas, positioned: .below, relativeTo: loupe)
