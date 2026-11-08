@@ -59,6 +59,11 @@ final class CaptureStore {
     private var thumbnails: [UUID: NSImage] = [:]
 
     private convenience init() {
+        // 예시 화면을 만들 때는 `-captureFolder <경로>` 인자로 다른 보관함을 쓴다.
+        if let custom = UserDefaults.standard.string(forKey: "captureFolder") {
+            self.init(directory: URL(fileURLWithPath: custom, isDirectory: true))
+            return
+        }
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         self.init(directory: support.appendingPathComponent("Grabby/Captures", isDirectory: true))
     }
