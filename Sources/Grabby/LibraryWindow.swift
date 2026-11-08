@@ -12,6 +12,8 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
     private let tabScroll = NSScrollView()
     private let pinButton = NSButton()
     private let listButton = NSButton()
+    private let scrollLeftButton = NSButton()
+    private let scrollRightButton = NSButton()
     private let keepButton = NSButton()
     private let zoomLabel = NSTextField(labelWithString: "")
     private let searchField = NSSearchField()
@@ -98,9 +100,27 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         ])
 
         configure(listButton, symbol: "square.grid.2x2", tip: L("모든 캡처 보기"), action: #selector(showList))
+        configure(scrollLeftButton, symbol: "chevron.left", tip: L("앞 탭 보기"), action: #selector(scrollTabsLeft))
+        configure(scrollRightButton, symbol: "chevron.right", tip: L("뒤 탭 보기"), action: #selector(scrollTabsRight))
+        for b in [scrollLeftButton, scrollRightButton] { b.isBordered = false }
+        // 탭 줄을 스크롤할 때마다 화살표를 쓸 수 있는지 다시 확인한다.
+        clip.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(updateTabArrows), name: NSView.boundsDidChangeNotification, object: clip)
+        NotificationCenter.default.addObserver(self, selector: #selector(updateTabArrows), name: NSView.frameDidChangeNotification, object: tabStrip)
+        tabStrip.postsFrameChangedNotifications = true
+        tabScroll.hasHorizontalScroller = false
         configure(pinButton, symbol: "pin", tip: L("창을 항상 위에 두기"), action: #selector(pinToggled))
         pinButton.setButtonType(.toggle)
         pinButton.alternateImage = NSImage(systemSymbolName: "pin.fill", accessibilityDescription: L("항상 위에"))
+        pinButton.isBordered = false
+        // 항상 위에 핀은 창 제목 줄 오른쪽에 둔다.
+        let accessory = NSTitlebarAccessoryViewController()
+        let holder = NSView(frame: NSRect(x: 0, y: 0, width: 36, height: 28))
+        pinButton.frame = NSRect(x: 4, y: 2, width: 26, height: 24)
+        holder.addSubview(pinButton)
+        accessory.view = holder
+        accessory.layoutAttribute = .trailing
+        window?.addTitlebarAccessoryViewController(accessory)
 
         searchField.placeholderString = L("글자·메모 검색")
         searchField.sendsSearchStringImmediately = true
@@ -158,15 +178,16 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         let bottomDivider = NSBox()
         bottomDivider.boxType = .separator
 
-        for view in [header, listButton, searchField, tabScroll, pinButton, topDivider, toolbar, canvasScroll, emptyLabel,
+        for view in [header, listButton, searchField, scrollLeftButton, tabScroll, scrollRightButton, topDivider, toolbar, canvasScroll, emptyLabel,
                      bottomDivider, footer, actions, zoom, zoomLabel] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
         }
         content.addSubview(header)
         header.addSubview(listButton)
         header.addSubview(searchField)
+        header.addSubview(scrollLeftButton)
         header.addSubview(tabScroll)
-        header.addSubview(pinButton)
+        header.addSubview(scrollRightButton)
         content.addSubview(topDivider)
         content.addSubview(toolbar)
         content.addSubview(canvasScroll)
@@ -187,12 +208,16 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
             searchField.leadingAnchor.constraint(equalTo: listButton.trailingAnchor, constant: 6),
             searchField.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             searchField.widthAnchor.constraint(equalToConstant: 150),
-            tabScroll.leadingAnchor.constraint(equalTo: searchField.trailingAnchor, constant: 6),
-            tabScroll.trailingAnchor.constraint(equalTo: pinButton.leadingAnchor, constant: -6),
+            scrollLeftButton.leadingAnchor.constraint(equalTo: searchField.trailingAnchor, constant: 6),
+            scrollLeftButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            scrollLeftButton.widthAnchor.constraint(equalToConstant: 20),
+            tabScroll.leadingAnchor.constraint(equalTo: scrollLeftButton.trailingAnchor, constant: 2),
+            tabScroll.trailingAnchor.constraint(equalTo: scrollRightButton.leadingAnchor, constant: -2),
             tabScroll.topAnchor.constraint(equalTo: header.topAnchor, constant: 6),
-            tabScroll.bottomAnchor.constraint(equalTo: header.bottomAnchor, constant: -4),
-            pinButton.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -10),
-            pinButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            tabScroll.bottomAnchor.constraint(equalTo: header.bottomAnchor, constant: -6),
+            scrollRightButton.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -8),
+            scrollRightButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            scrollRightButton.widthAnchor.constraint(equalToConstant: 20),
 
             topDivider.topAnchor.constraint(equalTo: header.bottomAnchor),
             topDivider.leadingAnchor.constraint(equalTo: content.leadingAnchor),
@@ -627,6 +652,31 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         } else {
             select(selectedID, reveal: false)
         }
+    }
+
+    /// 탭 줄을 보이는 너비의 80%만큼 옮긴다.
+    private func scrollTabs(by direction: CGFloat) {
+        let clip = tabScroll.contentView
+        let maxX = max(0, tabStrip.frame.width - clip.bounds.width)
+        let x = min(max(clip.bounds.origin.x + direction * clip.bounds.width * 0.8, 0), maxX)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.2
+            clip.animator().setBoundsOrigin(NSPoint(x: x, y: 0))
+        }
+        tabScroll.reflectScrolledClipView(clip)
+    }
+
+    @objc private func scrollTabsLeft() { scrollTabs(by: -1) }
+    @objc private func scrollTabsRight() { scrollTabs(by: 1) }
+
+    /// 더 볼 탭이 있는 쪽 화살표만 켠다. 탭이 모두 보이면 화살표를 숨긴다.
+    @objc private func updateTabArrows() {
+        let clip = tabScroll.contentView
+        let overflow = tabStrip.frame.width > clip.bounds.width + 1
+        scrollLeftButton.isHidden = !overflow
+        scrollRightButton.isHidden = !overflow
+        scrollLeftButton.isEnabled = clip.bounds.origin.x > 1
+        scrollRightButton.isEnabled = clip.bounds.maxX < tabStrip.frame.width - 1
     }
 
     @objc private func pinToggled() { setPinned(pinButton.state == .on) }

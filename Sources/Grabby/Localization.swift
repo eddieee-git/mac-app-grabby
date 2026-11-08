@@ -140,6 +140,8 @@ enum Localization {
         "⌘, ⌃, ⌥ 중 하나와 함께 누르세요.": "Press together with ⌘, ⌃ or ⌥.",
         "%@에서 쓰는 단축키예요.": "Already used by %@.",
         // 새 기능
+        "앞 탭 보기": "Earlier tabs",
+        "뒤 탭 보기": "Later tabs",
         "모두 저장…": "Save All…",
         "모두 닫기…": "Close All…",
         "모두 저장할 폴더": "Folder for All Captures",
