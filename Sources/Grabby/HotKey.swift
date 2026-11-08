@@ -173,3 +173,30 @@ final class HotKey {
         if let handlerRef { RemoveEventHandler(handlerRef) }
     }
 }
+
+/// 눌린 글자 키를 영문 소문자로 알려 준다. 한글 입력 상태(ㅁ→a)와 다른 자판 배열에서도 같은 단축키가 되도록
+/// 입력된 글자를 먼저 보고, 알 수 없으면 키 위치(ANSI 자판)로 판단한다. '?'와 '/'는 '/'로 돌려준다.
+enum KeyLetter {
+    private static let jamo: [Character: Character] = [
+        "ㅁ": "a", "ㅠ": "b", "ㅊ": "c", "ㅇ": "d", "ㄷ": "e", "ㄸ": "e", "ㄹ": "f", "ㅎ": "g", "ㅗ": "h", "ㅑ": "i", "ㅓ": "j",
+        "ㅏ": "k", "ㅣ": "l", "ㅡ": "m", "ㅜ": "n", "ㅐ": "o", "ㅒ": "o", "ㅔ": "p", "ㅖ": "p", "ㅂ": "q", "ㅃ": "q", "ㄱ": "r",
+        "ㄲ": "r", "ㄴ": "s", "ㅅ": "t", "ㅆ": "t", "ㅕ": "u", "ㅍ": "v", "ㅈ": "w", "ㅉ": "w", "ㅌ": "x", "ㅛ": "y", "ㅋ": "z",
+    ]
+    private static let codes: [Int: Character] = [
+        kVK_ANSI_A: "a", kVK_ANSI_B: "b", kVK_ANSI_C: "c", kVK_ANSI_D: "d", kVK_ANSI_E: "e", kVK_ANSI_F: "f", kVK_ANSI_G: "g",
+        kVK_ANSI_H: "h", kVK_ANSI_I: "i", kVK_ANSI_J: "j", kVK_ANSI_K: "k", kVK_ANSI_L: "l", kVK_ANSI_M: "m", kVK_ANSI_N: "n",
+        kVK_ANSI_O: "o", kVK_ANSI_P: "p", kVK_ANSI_Q: "q", kVK_ANSI_R: "r", kVK_ANSI_S: "s", kVK_ANSI_T: "t", kVK_ANSI_U: "u",
+        kVK_ANSI_V: "v", kVK_ANSI_W: "w", kVK_ANSI_X: "x", kVK_ANSI_Y: "y", kVK_ANSI_Z: "z", kVK_ANSI_Slash: "/",
+        kVK_ANSI_Equal: "=", kVK_ANSI_Minus: "-", kVK_ANSI_0: "0", kVK_ANSI_9: "9",
+    ]
+
+    static func of(_ event: NSEvent) -> Character? {
+        if let c = event.charactersIgnoringModifiers?.lowercased().first {
+            if c == "?" || c == "/" { return "/" }
+            if c == "+" { return "=" }
+            if c.isASCII, c.isLetter || c.isNumber || c == "=" || c == "-" { return c }
+            if let mapped = jamo[c] { return mapped }
+        }
+        return codes[Int(event.keyCode)]
+    }
+}

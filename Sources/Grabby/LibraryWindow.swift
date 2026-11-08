@@ -621,15 +621,15 @@ final class LibraryWindow: NSWindow {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         let mods = event.modifierFlags.intersection([.command, .shift, .option, .control])
         guard let library, mods.contains(.command), !library.isEditingText else { return super.performKeyEquivalent(with: event) }
-        switch Int(event.keyCode) {
-        case kVK_ANSI_P where mods == .command: library.pinCurrent()
-        case kVK_ANSI_T where mods == .command: library.recognizeCurrent()
-        case kVK_ANSI_B where mods == .command: library.beautifyCurrent()
-        case kVK_ANSI_Equal: library.zoom { $0.zoomIn() }
-        case kVK_ANSI_Minus: library.zoom { $0.zoomOut() }
-        case kVK_ANSI_0 where mods == .command: library.zoom { $0.zoomToActualSize() }
-        case kVK_ANSI_9 where mods == .command: library.zoom { $0.zoomToFit() }
-        case kVK_ANSI_Z where mods == [.command, .shift]: library.redoAnnotation()
+        switch KeyLetter.of(event) {
+        case "p" where mods == .command: library.pinCurrent()
+        case "t" where mods == .command: library.recognizeCurrent()
+        case "b" where mods == .command: library.beautifyCurrent()
+        case "=": library.zoom { $0.zoomIn() }
+        case "-": library.zoom { $0.zoomOut() }
+        case "0" where mods == .command: library.zoom { $0.zoomToActualSize() }
+        case "9" where mods == .command: library.zoom { $0.zoomToFit() }
+        case "z" where mods == [.command, .shift]: library.redoAnnotation()
         default: return super.performKeyEquivalent(with: event)
         }
         return true
@@ -647,7 +647,7 @@ final class LibraryWindow: NSWindow {
         case kVK_LeftArrow: library.moveSelection(by: -1)
         case kVK_RightArrow: library.moveSelection(by: 1)
         default:
-            if let tool = Tool.forKeyCode(event.keyCode) { library.selectTool(tool) } else { super.keyDown(with: event) }
+            if let tool = Tool.forLetter(KeyLetter.of(event)) { library.selectTool(tool) } else { super.keyDown(with: event) }
         }
     }
 }

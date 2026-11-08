@@ -77,7 +77,8 @@ enum WindowList {
         let me = ProcessInfo.processInfo.processIdentifier
         let screen = CGDisplayBounds(displayID)
         return info.compactMap { window in
-            guard (window[kCGWindowLayer as String] as? Int) == 0,
+            // 일반 창(0)과 떠 있는 창(Floaty 스티커 같은 3 등)은 고르고, Dock·메뉴바(20 이상)는 뺀다.
+            guard let layer = window[kCGWindowLayer as String] as? Int, (0..<20).contains(layer),
                   (window[kCGWindowOwnerPID as String] as? pid_t) != me,
                   (window[kCGWindowAlpha as String] as? Double ?? 1) > 0,
                   let bounds = window[kCGWindowBounds as String] as? NSDictionary,

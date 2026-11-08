@@ -140,15 +140,15 @@ final class OverlayWindow: NSPanel {
             let dx = code == kVK_LeftArrow ? -step : code == kVK_RightArrow ? step : 0
             let dy = code == kVK_UpArrow ? -step : code == kVK_DownArrow ? step : 0
             overlay.nudge(dx: dx, dy: dy, resize: event.modifierFlags.contains(.option))
-        case kVK_ANSI_C where canvas == nil && plain:
+        case _ where canvas == nil && plain && KeyLetter.of(event) == "c":
             overlay.copyColorUnderPointer()
             session?.cancel()
-        case kVK_ANSI_Slash:
+        case _ where KeyLetter.of(event) == "/":
             overlay.toggleHelp()
-        case kVK_ANSI_F where canvas == nil && plain:
+        case _ where canvas == nil && plain && KeyLetter.of(event) == "f":
             overlay.presentFullScreen()
         default:
-            if let canvas, plain, let tool = Tool.forKeyCode(event.keyCode) {
+            if let canvas, plain, let tool = Tool.forLetter(KeyLetter.of(event)) {
                 canvas.tool = tool
                 invalidateCursorRects(for: canvas)
             } else {
@@ -159,20 +159,20 @@ final class OverlayWindow: NSPanel {
 
     /// 앱이 앞에 있지 않아도 동작하도록 ⌘ 단축키를 직접 받는다. 글자를 입력하는 중에는 입력 칸에 넘긴다.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        handleCommand(event) || super.performKeyEquivalent(with: event)
+        return handleCommand(event) || super.performKeyEquivalent(with: event)
     }
 
     /// ⌘ 조합을 처리했으면 true. 키 이벤트가 performKeyEquivalent를 거치지 않고 keyDown으로 오는 경우에도 쓴다.
     private func handleCommand(_ event: NSEvent) -> Bool {
         let mods = event.modifierFlags.intersection([.command, .shift, .option, .control])
         guard mods.contains(.command), overlay.canvas?.isEditingText != true else { return false }
-        switch Int(event.keyCode) {
-        case kVK_ANSI_C where mods == .command: session?.confirm(overlay, .copy)
-        case kVK_ANSI_S where mods == .command: session?.confirm(overlay, .save)
-        case kVK_ANSI_P where mods == .command: session?.confirm(overlay, .pin)
-        case kVK_ANSI_T where mods == .command: session?.confirm(overlay, .ocr)
-        case kVK_ANSI_B where mods == .command: session?.confirm(overlay, .beautify)
-        case kVK_ANSI_Z: mods.contains(.shift) ? overlay.canvas?.redo() : overlay.canvas?.undo()
+        switch KeyLetter.of(event) {
+        case "c" where mods == .command: session?.confirm(overlay, .copy)
+        case "s" where mods == .command: session?.confirm(overlay, .save)
+        case "p" where mods == .command: session?.confirm(overlay, .pin)
+        case "t" where mods == .command: session?.confirm(overlay, .ocr)
+        case "b" where mods == .command: session?.confirm(overlay, .beautify)
+        case "z": mods.contains(.shift) ? overlay.canvas?.redo() : overlay.canvas?.undo()
         default: return false
         }
         return true
@@ -765,3 +765,5 @@ final class HandlesView: NSView {
         }
     }
 }
+
+

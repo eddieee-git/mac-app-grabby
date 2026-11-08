@@ -195,7 +195,7 @@ private struct SettingsView: View {
             .labelsHidden()
             .fixedSize()
             // 분할 버튼은 글자가 바뀌어도 다시 그리지 않아서, 언어를 바꾸면 새로 만든다.
-            .id(settings.language)
+            .id("segment1-\(settings.language.rawValue)")
             .padding(.top, 12)
 
             switch tab {
@@ -221,7 +221,7 @@ private struct SettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 // 분할 버튼은 글자가 바뀌어도 다시 그리지 않아서, 언어를 바꾸면 새로 만든다.
-                .id(settings.language)
+                .id("segment2-\(settings.language.rawValue)")
                 Toggle(L("로그인 시 실행"), isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, enabled in
                         do {
@@ -257,7 +257,7 @@ private struct SettingsView: View {
                     Text(L("굵게")).tag(2)
                 }
                 .pickerStyle(.segmented)
-                .id(settings.language)
+                .id("segment3-\(settings.language.rawValue)")
                 Toggle(L("마지막에 쓴 색과 굵기를 기본값으로 기억"), isOn: $settings.rememberLastStyle)
                 Picker(L("캡처할 때 시작 도구"), selection: $settings.captureTool) {
                     ForEach(Tool.allCases, id: \.self) { Text($0.name).tag($0) }
@@ -271,12 +271,12 @@ private struct SettingsView: View {
                     Text(L("넓게")).tag(2)
                 }
                 .pickerStyle(.segmented)
-                .id(settings.language)
+                .id("segment4-\(settings.language.rawValue)")
                 Picker(L("화이트보드 바탕"), selection: $settings.boardStyle) {
                     ForEach(AppSettings.BoardStyle.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .id(settings.language)
+                .id("segment5-\(settings.language.rawValue)")
                 Picker(L("화이트보드 시작 도구"), selection: $settings.whiteboardTool) {
                     ForEach(Tool.allCases.filter { $0 != .select }, id: \.self) { Text($0.name).tag($0) }
                 }

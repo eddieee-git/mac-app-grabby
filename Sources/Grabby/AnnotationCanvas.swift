@@ -77,19 +77,20 @@ enum Tool: Int, CaseIterable {
         self = tool
     }
 
-    static func forKeyCode(_ code: UInt16) -> Tool? {
-        switch Int(code) {
-        case kVK_ANSI_V: return .select
-        case kVK_ANSI_A: return .arrow
-        case kVK_ANSI_L: return .line
-        case kVK_ANSI_R: return .rect
-        case kVK_ANSI_O: return .ellipse
-        case kVK_ANSI_N: return .step
-        case kVK_ANSI_B: return .blur
-        case kVK_ANSI_P: return .pen
-        case kVK_ANSI_T: return .text
-        case kVK_ANSI_H: return .highlight
-        case kVK_ANSI_M: return .mosaic
+    /// 도구 단축키. `KeyLetter.of(event)`로 얻은 글자를 넘긴다.
+    static func forLetter(_ letter: Character?) -> Tool? {
+        switch letter {
+        case "v": return .select
+        case "a": return .arrow
+        case "l": return .line
+        case "r": return .rect
+        case "o": return .ellipse
+        case "n": return .step
+        case "b": return .blur
+        case "p": return .pen
+        case "t": return .text
+        case "h": return .highlight
+        case "m": return .mosaic
         default: return nil
         }
     }
