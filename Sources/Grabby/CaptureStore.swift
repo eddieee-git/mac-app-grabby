@@ -149,6 +149,16 @@ final class CaptureStore {
         save()
     }
 
+    /// 모든 캡처를 지운다. `keepKept`이면 ★ 고정한 캡처는 남긴다. 지운 개수를 돌려준다.
+    @discardableResult
+    func removeAll(keepKept: Bool) -> Int {
+        let doomed = items.filter { !(keepKept && $0.isKept) }
+        for item in doomed { delete(item) }
+        items.removeAll { item in doomed.contains { $0.id == item.id } }
+        save()
+        return doomed.count
+    }
+
     func remove(_ item: CaptureItem) {
         items.removeAll { $0.id == item.id }
         delete(item)

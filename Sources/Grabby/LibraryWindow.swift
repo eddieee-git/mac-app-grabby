@@ -484,6 +484,17 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
     /// 모든 캡처를 날짜별로 보여 주는 메뉴. 고르면 그 탭으로 간다.
     @objc private func showList() {
         let menu = NSMenu()
+        if !store.items.isEmpty {
+            let saveAll = NSMenuItem(title: L("모두 저장…"), action: #selector(saveAllAction), keyEquivalent: "")
+            saveAll.target = self
+            saveAll.image = NSImage(systemSymbolName: "square.and.arrow.down.on.square", accessibilityDescription: nil)
+            menu.addItem(saveAll)
+            let closeAll = NSMenuItem(title: L("모두 닫기…"), action: #selector(closeAllAction), keyEquivalent: "")
+            closeAll.target = self
+            closeAll.image = NSImage(systemSymbolName: "xmark.square", accessibilityDescription: nil)
+            menu.addItem(closeAll)
+            menu.addItem(.separator())
+        }
         let locale = Locale(identifier: Localization.language == .korean ? "ko_KR" : "en_US")
         let dayFormatter = DateFormatter()
         dayFormatter.locale = locale
@@ -521,6 +532,49 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
             menu.addItem(empty)
         }
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: listButton.bounds.height + 4), in: listButton)
+    }
+
+    /// 모든 캡처를 그린 표시까지 합친 이미지로 한 폴더에 저장한다.
+    @objc private func saveAllAction() {
+        saveEdits()
+        let entries = store.items.compactMap { item in store.image(for: item).map { ($0, item.scale, item.date) } }
+        ImageSaver.saveAll(entries) { [weak self] in self?.window?.makeKeyAndOrderFront(nil) }
+    }
+
+    /// 모든 탭을 지운다. 지우기 전에 항상 묻고, ★ 고정한 캡처가 있으면 남길지 고르게 한다.
+    @objc private func closeAllAction() {
+        guard let window else { return }
+        let keptCount = store.items.filter(\.isKept).count
+        let alert = NSAlert()
+        alert.messageText = L("모든 캡처를 닫을까요?")
+        alert.informativeText = L("탭 %ld개를 삭제해요. 삭제한 캡처는 되돌릴 수 없어요.", store.items.count)
+        if keptCount > 0 {
+            alert.addButton(withTitle: L("★ 고정한 것은 남기기"))
+            alert.addButton(withTitle: L("모두 삭제"))
+        } else {
+            alert.addButton(withTitle: L("모두 삭제"))
+        }
+        alert.addButton(withTitle: L("취소"))
+        alert.buttons.first?.keyEquivalent = ""
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard let self else { return }
+            let keepKept: Bool
+            switch response {
+            case .alertFirstButtonReturn: keepKept = keptCount > 0
+            case .alertSecondButtonReturn where keptCount > 0: keepKept = false
+            default: return
+            }
+            self.shownID = nil
+            self.selectedID = nil
+            self.canvas.load(Self.blank, pixelScale: 1)
+            self.isPersisting = true
+            let removed = self.store.removeAll(keepKept: keepKept)
+            self.isPersisting = false
+            self.knownNewest = self.store.items.first?.id
+            self.reloadTabs()
+            self.select(self.store.items.first?.id)
+            Toast.show(L("탭 %ld개를 닫았어요", removed))
+        }
     }
 
     @objc private func listPicked(_ sender: NSMenuItem) {

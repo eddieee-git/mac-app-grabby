@@ -40,6 +40,39 @@ enum ImageSaver {
         }
     }
 
+    /// 여러 캡처를 한 폴더에 저장한다. 설정에 따라 폴더를 고르는 창을 띄우거나 기본 폴더에 바로 저장한다.
+    static func saveAll(_ entries: [(image: CGImage, scale: CGFloat, date: Date)], completion: (() -> Void)? = nil) {
+        guard !entries.isEmpty else { completion?(); return }
+        let settings = AppSettings.shared
+        func write(to folder: URL) {
+            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            var saved = 0
+            for entry in entries {
+                let url = uniqueURL(in: folder, name: "Grabby \(nameFormatter.string(from: entry.date))", ext: settings.saveFormat.fileExtension)
+                if Self.write(entry.image, scale: entry.scale, to: url) { saved += 1 }
+            }
+            Toast.show(L("%ld개를 저장했어요 · %@", saved, folder.lastPathComponent))
+        }
+        if settings.saveWithoutPanel {
+            write(to: settings.saveFolder)
+            completion?()
+            return
+        }
+        let panel = NSOpenPanel()
+        panel.title = L("모두 저장할 폴더")
+        panel.prompt = L("여기에 저장")
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.directoryURL = settings.saveFolder
+        NSApp.activate(ignoringOtherApps: true)
+        panel.begin { response in
+            defer { completion?() }
+            guard response == .OK, let folder = panel.url else { return }
+            write(to: folder)
+        }
+    }
+
     private static func finish(_ image: CGImage, scale: CGFloat, to url: URL) {
         if write(image, scale: scale, to: url) {
             Toast.show(L("저장했어요 · %@", url.lastPathComponent))
