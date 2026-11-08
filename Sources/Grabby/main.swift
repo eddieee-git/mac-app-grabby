@@ -1,6 +1,11 @@
 import AppKit
 
 MainActor.assumeIsolated {
+    // 자동 점검만 돌리고 끝낸다(scripts/test.sh).
+    if CommandLine.arguments.contains("--self-test") {
+        _ = NSApplication.shared
+        exit(SelfTest.run())
+    }
     let app = NSApplication.shared
     let delegate = AppDelegate()
     app.delegate = delegate

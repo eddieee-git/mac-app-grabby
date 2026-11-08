@@ -58,9 +58,14 @@ final class CaptureStore {
     private let directory: URL
     private var thumbnails: [UUID: NSImage] = [:]
 
-    private init() {
+    private convenience init() {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        directory = support.appendingPathComponent("Grabby/Captures", isDirectory: true)
+        self.init(directory: support.appendingPathComponent("Grabby/Captures", isDirectory: true))
+    }
+
+    /// 테스트에서는 임시 폴더를 넘겨 실제 보관함을 건드리지 않는다.
+    init(directory: URL) {
+        self.directory = directory
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         if let data = try? Data(contentsOf: indexURL), let saved = try? JSONDecoder().decode([CaptureItem].self, from: data) {
             items = saved.filter { FileManager.default.fileExists(atPath: url(for: $0).path) }
@@ -87,8 +92,10 @@ final class CaptureStore {
 
     /// 보관 개수를 넘는 오래된 캡처를 지운다(고정한 캡처는 빼고 센다). 0이면 무제한.
     @discardableResult
-    func prune() -> Int {
-        let limit = AppSettings.shared.keepCount
+    func prune() -> Int { prune(limit: AppSettings.shared.keepCount) }
+
+    @discardableResult
+    func prune(limit: Int) -> Int {
         guard limit > 0 else { return 0 }
         var unkept = 0, removed = 0
         items = items.filter { item in

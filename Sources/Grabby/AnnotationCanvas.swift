@@ -293,9 +293,9 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
 
     private var draft: Annotation?
     /// 부분 선택 도구로 고른 영역(이미지 좌표). ⌘C로 이 부분만 복사한다.
-    private(set) var selectionRect: CGRect? { didSet { needsDisplay = true } }
+    var selectionRect: CGRect? { didSet { needsDisplay = true } }
     /// 클릭해서 고른 표시.
-    private(set) var selectedIndex: Int? { didSet { needsDisplay = true } }
+    var selectedIndex: Int? { didSet { needsDisplay = true } }
     private var dragStart: CGPoint?
     private var moveStart: CGPoint?
     private var movedOriginal: Annotation?
