@@ -31,7 +31,11 @@ struct CaptureResult {
 /// 멈춘 화면들을 덮어 영역을 고르고, 고른 자리에서 바로 편집하게 한다.
 /// 창은 포커스를 빼앗지 않는 패널이라, 원래 앱은 그대로 앞에 있고 키 입력만 이쪽으로 온다.
 final class CaptureSession {
-    enum Mode { case area, fullScreen, whiteboard }
+    enum Mode: Equatable {
+        case area, fullScreen, whiteboard
+        /// 앞에 있던 앱의 창(전역 좌표, 왼쪽 위 원점)을 고른 채 시작한다.
+        case window(CGRect)
+    }
 
     private var windows: [OverlayWindow] = []
     private let completion: (CaptureResult?) -> Void
@@ -44,8 +48,13 @@ final class CaptureSession {
         windows = shots.map { OverlayWindow(shot: $0, session: self, blank: mode == .whiteboard) }
         let mouse = NSEvent.mouseLocation
         for window in windows { window.orderFrontRegardless() }
-        // 마우스가 있는 화면이 키 입력을 받게 한다.
-        let active = windows.first { $0.frame.contains(mouse) } ?? windows.first
+        // 마우스가 있는 화면이 키 입력을 받게 한다. 창 캡처는 그 창이 가장 많이 걸친 화면.
+        var active = windows.first { $0.frame.contains(mouse) } ?? windows.first
+        if case let .window(rect) = mode {
+            active = windows.max { a, b in
+                Self.overlapArea(rect, CGDisplayBounds(a.overlay.shot.displayID)) < Self.overlapArea(rect, CGDisplayBounds(b.overlay.shot.displayID))
+            } ?? active
+        }
         active?.makeKey()
         guard let overlay = active?.overlay else { return }
         switch mode {
@@ -53,12 +62,20 @@ final class CaptureSession {
             overlay.pointerMoved(to: overlay.convert(active!.convertPoint(fromScreen: mouse), from: nil))
         case .fullScreen:
             overlay.presentFullScreen()
+        case let .window(rect):
+            let display = CGDisplayBounds(overlay.shot.displayID)
+            overlay.preselect(rect.offsetBy(dx: -display.minX, dy: -display.minY), tool: AppSettings.shared.captureTool)
         case .whiteboard:
             let size = overlay.bounds.size
             let board = CGSize(width: min(1200, size.width * 0.8), height: min(800, size.height * 0.75))
             overlay.preselect(CGRect(x: (size.width - board.width) / 2, y: (size.height - board.height) / 2,
                                      width: board.width, height: board.height), tool: AppSettings.shared.whiteboardTool)
         }
+    }
+
+    private static func overlapArea(_ a: CGRect, _ b: CGRect) -> CGFloat {
+        let r = a.intersection(b)
+        return r.isNull ? 0 : r.width * r.height
     }
 
     /// 한 화면에서 새로 영역을 고르기 시작하면 다른 화면의 선택은 지운다.
@@ -447,7 +464,8 @@ final class OverlayView: NSView {
                 guard let self else { return }
                 self.session?.confirm(self)
             },
-        ], hint: L("↩ 복사 · Esc 취소 · ? 단축키"), twoRows: true)
+        ], hint: AppSettings.shared.toolbarHint ? L("↩ 복사 · Esc 취소 · ? 단축키") : nil,
+           twoRows: AppSettings.shared.toolbarLayout == .twoRows)
         addSubview(toolbar, positioned: .below, relativeTo: loupe)
         self.toolbar = toolbar
         if !isPreview {
@@ -531,9 +549,10 @@ final class OverlayView: NSView {
         handles?.frame = rect.insetBy(dx: -Handle.size, dy: -Handle.size)
         handles?.needsDisplay = true
         guard let toolbar else { return }
-        // 선택 영역 아래 오른쪽에 붙이고, 자리가 없으면 위, 그래도 없으면 안쪽 아래에 둔다.
+        // 선택 영역 아래에(설정에 따라 가운데나 오른쪽에 맞춰) 붙이고, 자리가 없으면 위, 그래도 없으면 안쪽 아래에 둔다.
         let size = toolbar.frame.size, gap: CGFloat = 10
-        var origin = CGPoint(x: rect.maxX - size.width, y: rect.maxY + gap)
+        let x = AppSettings.shared.toolbarAlignment == .center ? rect.midX - size.width / 2 : rect.maxX - size.width
+        var origin = CGPoint(x: x.rounded(), y: rect.maxY + gap)
         if origin.y + size.height > bounds.height {
             origin.y = rect.minY - gap - size.height
             if origin.y < 0 { origin.y = rect.maxY - gap - size.height }

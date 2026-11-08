@@ -99,7 +99,8 @@ final class EditToolbar: NSVisualEffectView {
         }
         let stack = NSStackView(views: rows)
         stack.orientation = .vertical
-        stack.alignment = .leading
+        // 두 줄일 때는 줄마다 가운데로 맞춘다.
+        stack.alignment = twoRows ? .centerX : .leading
         stack.spacing = 4
         stack.edgeInsets = NSEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
         stack.translatesAutoresizingMaskIntoConstraints = false

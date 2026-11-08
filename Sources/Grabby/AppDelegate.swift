@@ -69,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .captureArea: captureArea()
         case .repeatLastArea: repeatLastArea()
         case .captureFullScreen: captureFullScreen()
+        case .captureWindow: captureFrontWindow()
         case .whiteboard: openWhiteboard()
         }
     }
@@ -114,11 +115,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let capture = item(HotKeyAction.captureArea.title, action: #selector(captureArea))
         let repeatLast = item(HotKeyAction.repeatLastArea.title, action: #selector(repeatLastArea))
         let fullScreen = item(HotKeyAction.captureFullScreen.title, action: #selector(captureFullScreen))
+        let frontWindow = item(HotKeyAction.captureWindow.title, action: #selector(captureFrontWindow))
         let whiteboard = item(HotKeyAction.whiteboard.title, action: #selector(openWhiteboard))
-        hotKeyItems = [.captureArea: capture, .repeatLastArea: repeatLast, .captureFullScreen: fullScreen, .whiteboard: whiteboard]
+        hotKeyItems = [.captureArea: capture, .repeatLastArea: repeatLast, .captureFullScreen: fullScreen, .captureWindow: frontWindow, .whiteboard: whiteboard]
         menu.addItem(capture)
         menu.addItem(repeatLast)
         menu.addItem(fullScreen)
+        menu.addItem(frontWindow)
         menu.addItem(whiteboard)
         let timer = NSMenuItem(title: L("타이머 캡처"), action: nil, keyEquivalent: "")
         let timerMenu = NSMenu()
@@ -231,6 +234,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tick()
     }
     @objc private func captureFullScreen() { startSession(.fullScreen) }
+
+    /// 지금 앞에 있는 앱의 맨 앞 창을 고른 채 편집 화면을 연다. 창을 못 찾으면 영역 캡처로 시작한다.
+    @objc private func captureFrontWindow() {
+        let front = NSWorkspace.shared.frontmostApplication
+        guard let pid = front?.processIdentifier, pid != ProcessInfo.processInfo.processIdentifier,
+              let rect = WindowList.frontWindow(of: pid) else {
+            startSession(.area)
+            return
+        }
+        startSession(.window(rect))
+    }
     @objc private func openWhiteboard() { startSession(.whiteboard) }
 
     /// 마지막으로 고른 영역을 편집 없이 바로 다시 찍어 복사한다.

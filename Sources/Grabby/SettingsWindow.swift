@@ -45,6 +45,18 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// 캡처 화면 도구 막대 모양.
+    enum ToolbarLayout: String, CaseIterable {
+        case twoRows, oneRow
+        var title: String { self == .twoRows ? L("두 줄") : L("한 줄") }
+    }
+
+    /// 도구 막대를 고른 영역의 어디에 맞출지.
+    enum ToolbarAlignment: String, CaseIterable {
+        case center, trailing
+        var title: String { self == .center ? L("가운데") : L("오른쪽") }
+    }
+
     enum SaveFormat: String, CaseIterable {
         case png, jpeg
 
@@ -99,6 +111,10 @@ final class AppSettings: ObservableObject {
     /// `Beautifier.paddings`의 번호
     @Published var beautifyPadding: Int { didSet { defaults.set(beautifyPadding, forKey: "beautifyPadding") } }
 
+    @Published var toolbarLayout: ToolbarLayout { didSet { defaults.set(toolbarLayout.rawValue, forKey: "toolbarLayout") } }
+    @Published var toolbarAlignment: ToolbarAlignment { didSet { defaults.set(toolbarAlignment.rawValue, forKey: "toolbarAlignment") } }
+    @Published var toolbarHint: Bool { didSet { defaults.set(toolbarHint, forKey: "toolbarHint") } }
+
     static let defaultSaveFolder = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask)[0]
 
     private init() {
@@ -138,6 +154,9 @@ final class AppSettings: ObservableObject {
         boardStyle = defaults.string(forKey: "boardStyle").flatMap(BoardStyle.init) ?? .white
         beautifyBackground = defaults.string(forKey: "beautifyBackground").flatMap(Beautifier.Background.init) ?? .ocean
         beautifyPadding = defaults.object(forKey: "beautifyPadding") as? Int ?? 1
+        toolbarLayout = defaults.string(forKey: "toolbarLayout").flatMap(ToolbarLayout.init) ?? .twoRows
+        toolbarAlignment = defaults.string(forKey: "toolbarAlignment").flatMap(ToolbarAlignment.init) ?? .center
+        toolbarHint = defaults.object(forKey: "toolbarHint") as? Bool ?? true
     }
 }
 
@@ -259,6 +278,17 @@ private struct SettingsView: View {
                 .pickerStyle(.segmented)
                 .id("segment3-\(settings.language.rawValue)")
                 Toggle(L("마지막에 쓴 색과 굵기를 기본값으로 기억"), isOn: $settings.rememberLastStyle)
+                Picker(L("캡처 도구 막대"), selection: $settings.toolbarLayout) {
+                    ForEach(AppSettings.ToolbarLayout.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .id("segment6-\(settings.language.rawValue)")
+                Picker(L("도구 막대 위치"), selection: $settings.toolbarAlignment) {
+                    ForEach(AppSettings.ToolbarAlignment.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .id("segment7-\(settings.language.rawValue)")
+                Toggle(L("도구 막대 아래 안내 문구 보이기"), isOn: $settings.toolbarHint)
                 Picker(L("캡처할 때 시작 도구"), selection: $settings.captureTool) {
                     ForEach(Tool.allCases, id: \.self) { Text($0.name).tag($0) }
                 }

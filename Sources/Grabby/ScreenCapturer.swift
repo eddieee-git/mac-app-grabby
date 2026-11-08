@@ -91,6 +91,25 @@ enum WindowList {
     }
 }
 
+extension WindowList {
+    /// 앱의 맨 앞 창 영역(전역 좌표, 왼쪽 위 원점). 창이 없으면 nil.
+    static func frontWindow(of pid: pid_t) -> CGRect? {
+        guard let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
+            return nil
+        }
+        for window in info {
+            guard (window[kCGWindowOwnerPID as String] as? pid_t) == pid,
+                  let layer = window[kCGWindowLayer as String] as? Int, (0..<20).contains(layer),
+                  (window[kCGWindowAlpha as String] as? Double ?? 1) > 0,
+                  let bounds = window[kCGWindowBounds as String] as? NSDictionary,
+                  let rect = CGRect(dictionaryRepresentation: bounds),
+                  rect.width >= 40, rect.height >= 40 else { continue }
+            return rect
+        }
+        return nil
+    }
+}
+
 extension NSScreen {
     var displayID: CGDirectDisplayID {
         (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? 0
