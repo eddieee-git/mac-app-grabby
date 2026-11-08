@@ -156,6 +156,16 @@ final class AppSettings: ObservableObject {
         return true
     }
 
+    /// 색 순서를 바꾼다. 기본 색은 옮긴 뒤에도 같은 색을 가리킨다.
+    func movePaletteColor(from source: Int, to destination: Int) {
+        guard paletteEntries.indices.contains(source), paletteEntries.indices.contains(destination), source != destination else { return }
+        let defaultEntry = paletteEntries.indices.contains(defaultColorIndex) ? paletteEntries[defaultColorIndex] : nil
+        var entries = paletteEntries
+        entries.insert(entries.remove(at: source), at: destination)
+        paletteEntries = entries
+        if let defaultEntry, let index = entries.firstIndex(of: defaultEntry) { defaultColorIndex = index }
+    }
+
     /// 색을 뺀다. 마지막 한 색은 남긴다.
     func removePaletteColor(at index: Int) {
         guard paletteEntries.count > 1, paletteEntries.indices.contains(index) else { return }
@@ -463,16 +473,37 @@ private struct PaletteEditor: View {
                 Spacer()
                 Button(L("기본값으로")) { settings.paletteEntries = AppSettings.defaultPalette; settings.defaultColorIndex = 0 }
             }
-            Text(message ?? L("색을 누르면 기본 색이 되고, 오른쪽 클릭으로 뺄 수 있어요. 최대 %ld색.", AppSettings.paletteLimit))
+            Text(message ?? L("색을 누르면 기본 색, 끌어서 순서 바꾸기, 오른쪽 클릭으로 옮기기·빼기. 최대 %ld색.", AppSettings.paletteLimit))
                 .font(.caption)
                 .foregroundStyle(message == nil ? Color.secondary : Color.orange)
         }
     }
 }
 
+/// 팔레트 색을 끌어다 놓을 때, 다른 색 위로 들어가는 순간 그 자리로 옮긴다.
+private struct SwatchDrop: DropDelegate {
+    let target: Int
+    @Binding var dragging: Int?
+    let settings: AppSettings
+
+    func dropEntered(info: DropInfo) {
+        guard let from = dragging, from != target else { return }
+        settings.movePaletteColor(from: from, to: target)
+        dragging = target
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
+    }
+}
+
 private struct ColorSwatches: View {
     @Binding var selection: Int
     @ObservedObject var settings: AppSettings
+    @State private var dragging: Int?
 
     var body: some View {
         let palette = settings.palette
@@ -487,7 +518,19 @@ private struct ColorSwatches: View {
                     .contentShape(Circle())
                     .onTapGesture { selection = index }
                     .help(AppSettings.hex(palette[index]))
+                    .opacity(dragging == index ? 0.4 : 1)
+                    // 끌어서 다른 색 위에 놓으면 그 자리로 옮긴다.
+                    .onDrag {
+                        dragging = index
+                        return NSItemProvider(object: String(index) as NSString)
+                    }
+                    .onDrop(of: [.text], delegate: SwatchDrop(target: index, dragging: $dragging, settings: settings))
                     .contextMenu {
+                        Button(L("왼쪽으로 옮기기")) { settings.movePaletteColor(from: index, to: index - 1) }
+                            .disabled(index == 0)
+                        Button(L("오른쪽으로 옮기기")) { settings.movePaletteColor(from: index, to: index + 1) }
+                            .disabled(index == palette.count - 1)
+                        Divider()
                         Button(L("빼기")) { settings.removePaletteColor(at: index) }
                             .disabled(palette.count <= 1)
                     }
