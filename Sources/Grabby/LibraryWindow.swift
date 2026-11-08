@@ -14,6 +14,8 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
     private let listButton = NSButton()
     private let keepButton = NSButton()
     private let zoomLabel = NSTextField(labelWithString: "")
+    private let searchField = NSSearchField()
+    private var query = ""
     private var tabs: [CaptureTab] = []
     private var selectedID: UUID?
     private var shownID: UUID?
@@ -46,6 +48,7 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         knownNewest = store.items.first?.id
         reloadTabs()
         select(store.items.first?.id)
+        store.indexText()
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -92,6 +95,12 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         pinButton.setButtonType(.toggle)
         pinButton.alternateImage = NSImage(systemSymbolName: "pin.fill", accessibilityDescription: L("항상 위에"))
 
+        searchField.placeholderString = L("글자·메모 검색")
+        searchField.sendsSearchStringImmediately = true
+        searchField.target = self
+        searchField.action = #selector(searchChanged)
+        searchField.toolTip = L("캡처 속 글자나 메모로 찾아요")
+
         let header = NSView()
         let topDivider = NSBox()
         topDivider.boxType = .separator
@@ -119,6 +128,9 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
             button("square.and.arrow.down", L("파일로 저장 (⌘S) · 고른 부분이 있으면 그 부분만"), #selector(saveAction)),
             button("pin", L("화면에 띄우기 (⌘P)"), #selector(pinAction)),
             button("text.viewfinder", L("글자 복사 (⌘T) · 이미지 속 글자를 인식해 복사"), #selector(ocrAction)),
+            button("wand.and.stars", L("꾸며서 복사 (⌘B) · 여백·배경·그림자를 넣어 복사"), #selector(beautifyAction)),
+            button("crop", L("자르기 · 부분 선택한 영역만 남겨요"), #selector(cropAction)),
+            button("note.text", L("메모 달기 · 탭 이름으로 보이고 검색돼요"), #selector(noteAction)),
             keepButton,
             button("folder", L("Finder에서 보기"), #selector(revealAction)),
             button("trash", L("삭제 (⌫)"), #selector(deleteAction)),
@@ -139,12 +151,13 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         let bottomDivider = NSBox()
         bottomDivider.boxType = .separator
 
-        for view in [header, listButton, tabScroll, pinButton, topDivider, toolbar, canvasScroll, emptyLabel,
+        for view in [header, listButton, searchField, tabScroll, pinButton, topDivider, toolbar, canvasScroll, emptyLabel,
                      bottomDivider, footer, actions, zoom, zoomLabel] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
         }
         content.addSubview(header)
         header.addSubview(listButton)
+        header.addSubview(searchField)
         header.addSubview(tabScroll)
         header.addSubview(pinButton)
         content.addSubview(topDivider)
@@ -164,7 +177,10 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
 
             listButton.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 10),
             listButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
-            tabScroll.leadingAnchor.constraint(equalTo: listButton.trailingAnchor, constant: 6),
+            searchField.leadingAnchor.constraint(equalTo: listButton.trailingAnchor, constant: 6),
+            searchField.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            searchField.widthAnchor.constraint(equalToConstant: 150),
+            tabScroll.leadingAnchor.constraint(equalTo: searchField.trailingAnchor, constant: 6),
             tabScroll.trailingAnchor.constraint(equalTo: pinButton.leadingAnchor, constant: -6),
             tabScroll.topAnchor.constraint(equalTo: header.topAnchor, constant: 6),
             tabScroll.bottomAnchor.constraint(equalTo: header.bottomAnchor, constant: -4),
@@ -234,7 +250,7 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
     /// 오래된 것이 왼쪽, 새 캡처가 오른쪽 끝에 오도록 탭을 다시 만든다.
     private func reloadTabs() {
         for tab in tabs { tab.removeFromSuperview() }
-        tabs = store.items.reversed().map { item in
+        tabs = store.items.reversed().filter { $0.matches(query) }.map { item in
             let tab = CaptureTab(item: item, thumbnail: store.thumbnail(for: item), fileURL: store.url(for: item))
             tab.onSelect = { [weak self] in self?.select(item.id) }
             tab.onClose = { [weak self] in self?.delete(item.id) }
@@ -277,6 +293,12 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         reloadTabs()
         if let newest, newest.id != knownNewest {
             knownNewest = newest.id
+            // 검색 중이면 새 캡처가 보이도록 검색을 지운다.
+            if !query.isEmpty, !newest.matches(query) {
+                query = ""
+                searchField.stringValue = ""
+                reloadTabs()
+            }
             select(newest.id)
         } else {
             select(selectedID ?? newest?.id, reveal: false)
@@ -366,6 +388,64 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
+    @objc private func searchChanged() {
+        query = searchField.stringValue
+        reloadTabs()
+        // 찾은 탭이 있는데 보던 탭이 빠졌으면 가장 최근 것을 보여 준다.
+        if !tabs.contains(where: { $0.item.id == selectedID }), let last = tabs.last { select(last.item.id) }
+        if let tab = tabs.first(where: { $0.item.id == selectedID }) {
+            tabStrip.layoutSubtreeIfNeeded()
+            tab.scrollToVisible(tab.bounds)
+        }
+    }
+
+    @objc private func cropAction() {
+        guard canvas.selectionRect != nil else {
+            Toast.show(L("부분 선택(V)으로 남길 영역을 먼저 고르세요"))
+            return
+        }
+        canvas.cropToSelection()
+        layoutCanvas()
+        if let item = selectedItem { persist(item) }
+    }
+
+    @objc private func noteAction() {
+        guard let item = selectedItem, let window else { return }
+        let alert = NSAlert()
+        alert.messageText = L("메모")
+        alert.informativeText = L("탭 이름 대신 보이고, 검색할 때 찾을 수 있어요.")
+        let field = NSTextField(string: item.note ?? "")
+        field.frame = NSRect(x: 0, y: 0, width: 280, height: 24)
+        field.placeholderString = L("예: 회의 자료, 버그 화면")
+        alert.accessoryView = field
+        alert.addButton(withTitle: L("저장"))
+        alert.addButton(withTitle: L("취소"))
+        alert.window.initialFirstResponder = field
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard response == .alertFirstButtonReturn else { return }
+            self?.store.setNote(item, field.stringValue)
+        }
+    }
+
+    /// ⌘V: 클립보드의 이미지를 새 탭으로 넣는다.
+    func pasteImage() {
+        guard let (image, scale) = Clipboard.image() else {
+            Toast.show(L("클립보드에 이미지가 없어요"))
+            return
+        }
+        CaptureStore.shared.add(image, scale: scale)
+        Toast.show(L("붙여 넣어 새 탭을 만들었어요"))
+        store.indexText()
+    }
+
+    func beautifyCurrent() {
+        guard let item = selectedItem, let image = currentImage() else { return }
+        let pretty = Beautifier.apply(image, scale: item.scale)
+        Clipboard.copy(pretty, scale: item.scale)
+        Toast.show(L("꾸며서 복사했어요"), image: NSImage(cgImage: pretty, size: .zero))
+    }
+
+    @objc private func beautifyAction() { beautifyCurrent() }
     @objc private func copyAction() { copyCurrent() }
     @objc private func saveAction() { saveCurrent() }
     @objc private func pinAction() { pinCurrent() }
@@ -522,6 +602,7 @@ final class LibraryWindow: NSWindow {
     weak var library: LibraryWindowController?
 
     @objc func copy(_ sender: Any?) { library?.copyCurrent() }
+    @objc func paste(_ sender: Any?) { library?.pasteImage() }
     @objc func saveDocument(_ sender: Any?) { library?.saveCurrent() }
     @objc func undo(_ sender: Any?) { library?.undoAnnotation() }
     @objc func redo(_ sender: Any?) { library?.redoAnnotation() }
@@ -532,6 +613,7 @@ final class LibraryWindow: NSWindow {
         switch Int(event.keyCode) {
         case kVK_ANSI_P where mods == .command: library.pinCurrent()
         case kVK_ANSI_T where mods == .command: library.recognizeCurrent()
+        case kVK_ANSI_B where mods == .command: library.beautifyCurrent()
         case kVK_ANSI_Equal: library.zoom { $0.zoomIn() }
         case kVK_ANSI_Minus: library.zoom { $0.zoomOut() }
         case kVK_ANSI_0 where mods == .command: library.zoom { $0.zoomToActualSize() }
@@ -590,11 +672,12 @@ final class CaptureTab: NSView, NSDraggingSource {
         } else {
             formatter.setLocalizedDateFormatFromTemplate("Mdjmm")
         }
-        label = NSTextField(labelWithString: formatter.string(from: item.date))
+        let time = formatter.string(from: item.date)
+        label = NSTextField(labelWithString: item.note ?? time)
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 6
-        toolTip = "\(item.width)×\(item.height)"
+        toolTip = [item.note, time, "\(item.width)×\(item.height)"].compactMap { $0 }.joined(separator: "\n")
 
         imageView.image = thumbnail
         imageView.imageScaling = .scaleProportionallyDown

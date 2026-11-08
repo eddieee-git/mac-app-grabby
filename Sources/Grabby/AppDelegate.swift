@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var session: CaptureSession?
     private var library: LibraryWindowController?
     private let settingsWindow = SettingsWindowController()
+    private let welcome = WelcomeWindowController()
     private let settings = AppSettings.shared
     /// 캡처를 시작하기 전에 앞에 있던 앱. 캡처가 끝나면 돌려줘서 바로 ⌘V로 붙여 넣을 수 있게 한다.
     private var previousApp: NSRunningApplication?
@@ -32,6 +33,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.updateHotKeyItems(combos)
         }
         _ = CaptureStore.shared
+        ScreenCapturer.warmUp()
+        NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                ScreenCapturer.invalidate()
+                ScreenCapturer.warmUp()
+            }
+        }
+        if !UserDefaults.standard.bool(forKey: "didShowWelcome") {
+            UserDefaults.standard.set(true, forKey: "didShowWelcome")
+            welcome.show()
+        }
         // 다른 캡처 앱이 켜져 있으면 단축키가 겹칠 수 있다고 한 번 알려 준다.
         let others = HotKeyConflicts.runningCaptureApps
         if !others.isEmpty {
@@ -108,9 +120,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(repeatLast)
         menu.addItem(fullScreen)
         menu.addItem(whiteboard)
+        let timer = NSMenuItem(title: L("타이머 캡처"), action: nil, keyEquivalent: "")
+        let timerMenu = NSMenu()
+        for seconds in [3, 5, 10] {
+            let entry = item(L("%ld초 뒤", seconds), action: #selector(captureWithTimer(_:)))
+            entry.tag = seconds
+            timerMenu.addItem(entry)
+        }
+        timer.submenu = timerMenu
+        menu.addItem(timer)
         menu.addItem(.separator())
         menu.addItem(item(L("캡처 창 열기"), action: #selector(openLibrary)))
         menu.addItem(item(L("띄운 캡처 모두 닫기"), action: #selector(closeAllPins)))
+        menu.addItem(.separator())
+        menu.addItem(item(L("시작 안내"), action: #selector(openWelcome)))
         menu.addItem(.separator())
         let settingsItem = item(L("설정…"), action: #selector(openSettings))
         settingsItem.keyEquivalent = ","
@@ -154,6 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openSettings() { settingsWindow.show() }
     @objc private func closeAllPins() { PinWindow.closeAll() }
+    @objc private func openWelcome() { welcome.show() }
 
     @objc private func openLibrary() {
         if library == nil { library = LibraryWindowController() }
@@ -188,6 +212,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func captureArea() { startSession(.area) }
+
+    /// n초 뒤에 영역 캡처를 시작한다. 남은 시간을 보여 주고, 찍기 직전에 알림을 치운다.
+    @objc private func captureWithTimer(_ sender: NSMenuItem) {
+        guard session == nil else { return }
+        if !ScreenCapturer.hasPermission { ScreenCapturer.requestPermission(); return }
+        var remaining = sender.tag
+        func tick() {
+            if remaining == 0 {
+                Toast.hide()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in self?.startSession(.area) }
+                return
+            }
+            Toast.show(L("%ld초 뒤에 캡처해요", remaining))
+            remaining -= 1
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { tick() }
+        }
+        tick()
+    }
     @objc private func captureFullScreen() { startSession(.fullScreen) }
     @objc private func openWhiteboard() { startSession(.whiteboard) }
 
@@ -230,6 +272,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Toast.show(message, image: CaptureStore.shared.thumbnail(for: item))
         if library == nil { library = LibraryWindowController() }
         library?.showWithoutFocus()
+        CaptureStore.shared.indexText()
     }
 
     /// 캡처·화이트보드를 마친 뒤 고른 동작을 하고 원래 앱으로 돌아간다.
@@ -258,6 +301,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             returnToPreviousApp()
         case .copy:
             save(result)
+            returnToPreviousApp()
+        case .beautify:
+            // 탭에는 원래 캡처를 넣고, 클립보드에는 꾸민 이미지를 넣는다.
+            save(result)
+            Clipboard.copy(Beautifier.apply(result.image, scale: result.pixelScale), scale: result.pixelScale)
+            Toast.show(L("꾸며서 복사했어요"))
             returnToPreviousApp()
         }
     }

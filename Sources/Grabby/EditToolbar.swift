@@ -15,6 +15,8 @@ final class EditToolbar: NSVisualEffectView {
     private let canvas: AnnotationCanvas
     private let tools: NSSegmentedControl
     private let colors: NSSegmentedControl
+    /// 팔레트에 없는 색을 고르는 칸.
+    private let colorWell = NSColorWell(style: .minimal)
     private let widths: NSSegmentedControl
     private var actions: [Action] = []
     /// 막대에 보여 줄 도구(순서대로).
@@ -43,13 +45,18 @@ final class EditToolbar: NSVisualEffectView {
         tools.action = #selector(toolChanged)
         colors.target = self
         colors.action = #selector(colorChanged)
+        colorWell.target = self
+        colorWell.action = #selector(customColorChanged)
+        colorWell.toolTip = L("색 직접 고르기")
+        colorWell.widthAnchor.constraint(equalToConstant: 26).isActive = true
+        colorWell.heightAnchor.constraint(equalToConstant: 18).isActive = true
         widths.target = self
         widths.action = #selector(widthChanged)
         for (index, title) in [L("얇게"), L("보통"), L("굵게")].enumerated() { widths.setToolTip(L("선 굵기·글자 크기: %@", title), forSegment: index) }
 
         let undo = button(symbol: "arrow.uturn.backward", title: L("되돌리기 (⌘Z)"), action: #selector(undoTapped))
         let redo = button(symbol: "arrow.uturn.forward", title: L("다시 실행 (⇧⌘Z)"), action: #selector(redoTapped))
-        var views: [NSView] = [tools, colors, widths, undo, redo]
+        var views: [NSView] = [tools, colors, colorWell, widths, undo, redo]
         for (index, action) in actions.enumerated() {
             let b = button(symbol: action.symbol, title: action.title, action: #selector(actionTapped(_:)))
             b.tag = index
@@ -70,6 +77,7 @@ final class EditToolbar: NSVisualEffectView {
         let row = NSStackView(views: views)
         row.spacing = 8
         row.setCustomSpacing(4, after: colors)
+        row.setCustomSpacing(6, after: colorWell)
         var rows: [NSView] = [row]
         if let hint {
             let label = NSTextField(labelWithString: hint)
@@ -100,7 +108,8 @@ final class EditToolbar: NSVisualEffectView {
 
     private func sync() {
         tools.selectedSegment = toolList.firstIndex(of: canvas.tool) ?? -1
-        colors.selectedSegment = AnnotationCanvas.palette.firstIndex(of: canvas.color) ?? 0
+        colors.selectedSegment = AnnotationCanvas.palette.firstIndex(of: canvas.color) ?? -1
+        colorWell.color = canvas.color
         widths.selectedSegment = canvas.widthLevel
     }
 
@@ -114,6 +123,10 @@ final class EditToolbar: NSVisualEffectView {
     @objc private func toolChanged() {
         if toolList.indices.contains(tools.selectedSegment) { canvas.tool = toolList[tools.selectedSegment] }
         canvas.window?.invalidateCursorRects(for: canvas)
+    }
+
+    @objc private func customColorChanged() {
+        canvas.applyColor(colorWell.color)
     }
 
     @objc private func colorChanged() {

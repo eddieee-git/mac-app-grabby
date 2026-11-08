@@ -93,6 +93,12 @@ final class AppSettings: ObservableObject {
     @Published var captureSound: Bool { didSet { defaults.set(captureSound, forKey: "captureSound") } }
     @Published var boardStyle: BoardStyle { didSet { defaults.set(boardStyle.rawValue, forKey: "boardStyle") } }
 
+    @Published var beautifyBackground: Beautifier.Background {
+        didSet { defaults.set(beautifyBackground.rawValue, forKey: "beautifyBackground") }
+    }
+    /// `Beautifier.paddings`의 번호
+    @Published var beautifyPadding: Int { didSet { defaults.set(beautifyPadding, forKey: "beautifyPadding") } }
+
     static let defaultSaveFolder = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask)[0]
 
     private init() {
@@ -130,6 +136,8 @@ final class AppSettings: ObservableObject {
         keepCount = defaults.object(forKey: "keepCount") as? Int ?? 100
         captureSound = defaults.object(forKey: "captureSound") as? Bool ?? true
         boardStyle = defaults.string(forKey: "boardStyle").flatMap(BoardStyle.init) ?? .white
+        beautifyBackground = defaults.string(forKey: "beautifyBackground").flatMap(Beautifier.Background.init) ?? .ocean
+        beautifyPadding = defaults.object(forKey: "beautifyPadding") as? Int ?? 1
     }
 }
 
@@ -161,7 +169,7 @@ final class SettingsWindowController {
 
 private struct SettingsView: View {
     enum Tab: CaseIterable {
-        case general, editing, saving, shortcuts
+        case general, editing, saving, shortcuts, about
 
         var title: String {
             switch self {
@@ -169,6 +177,7 @@ private struct SettingsView: View {
             case .editing: return L("편집")
             case .saving: return L("저장")
             case .shortcuts: return L("단축키")
+            case .about: return L("정보")
             }
         }
     }
@@ -194,6 +203,7 @@ private struct SettingsView: View {
             case .editing: editing
             case .saving: saving
             case .shortcuts: shortcuts
+            case .about: about
             }
         }
         .frame(width: 460)
@@ -252,6 +262,16 @@ private struct SettingsView: View {
                 Picker(L("캡처할 때 시작 도구"), selection: $settings.captureTool) {
                     ForEach(Tool.allCases, id: \.self) { Text($0.name).tag($0) }
                 }
+                Picker(L("꾸미기 배경"), selection: $settings.beautifyBackground) {
+                    ForEach(Beautifier.Background.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                Picker(L("꾸미기 여백"), selection: $settings.beautifyPadding) {
+                    Text(L("좁게")).tag(0)
+                    Text(L("보통")).tag(1)
+                    Text(L("넓게")).tag(2)
+                }
+                .pickerStyle(.segmented)
+                .id(settings.language)
                 Picker(L("화이트보드 바탕"), selection: $settings.boardStyle) {
                     ForEach(AppSettings.BoardStyle.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
@@ -299,6 +319,28 @@ private struct SettingsView: View {
         .formStyle(.grouped)
     }
 
+
+    private var about: some View {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "-"
+        let build = info?["CFBundleVersion"] as? String ?? "-"
+        let captures = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Grabby/Captures", isDirectory: true)
+        return VStack(spacing: 10) {
+            Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 72, height: 72)
+            Text("Grabby").font(.title.bold())
+            Text(L("버전 %@ (%@)", version, build)).foregroundStyle(.secondary)
+            Text(L("필요한 기능만 담은 메뉴바 화면 캡처 앱")).font(.callout)
+            HStack {
+                Button(L("캡처 폴더 열기")) { NSWorkspace.shared.open(captures) }
+                Button(L("시작 안내")) { NSApp.sendAction(Selector(("openWelcome")), to: nil, from: nil) }
+                Link(L("GitHub 저장소"), destination: URL(string: "https://github.com/eddieee-git/Grabby")!)
+            }
+            .padding(.top, 6)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity)
+    }
 
     private func chooseFolder() {
         let panel = NSOpenPanel()

@@ -5,6 +5,13 @@ enum Toast {
     private static var panel: NSPanel?
     private static var hideWork: DispatchWorkItem?
 
+    /// 바로 치운다(타이머 캡처에서 알림이 찍히지 않게).
+    static func hide() {
+        hideWork?.cancel()
+        panel?.orderOut(nil)
+        panel = nil
+    }
+
     static func show(_ message: String, image: NSImage? = nil) {
         panel?.orderOut(nil)
         hideWork?.cancel()

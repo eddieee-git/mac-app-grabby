@@ -3,7 +3,7 @@ import Carbon
 
 /// 캡처를 마친 뒤 할 일.
 enum CaptureAction {
-    case copy, save, pin, ocr
+    case copy, save, pin, ocr, beautify
 }
 
 /// 영역 캡처를 마친 결과. `rect`는 화면 왼쪽 위 기준 포인트 좌표다.
@@ -142,6 +142,8 @@ final class OverlayWindow: NSPanel {
         case kVK_ANSI_C where canvas == nil && plain:
             overlay.copyColorUnderPointer()
             session?.cancel()
+        case kVK_ANSI_Slash:
+            overlay.toggleHelp()
         case kVK_ANSI_F where canvas == nil && plain:
             overlay.presentFullScreen()
         default:
@@ -163,6 +165,7 @@ final class OverlayWindow: NSPanel {
         case kVK_ANSI_S where mods == .command: session?.confirm(overlay, .save)
         case kVK_ANSI_P where mods == .command: session?.confirm(overlay, .pin)
         case kVK_ANSI_T where mods == .command: session?.confirm(overlay, .ocr)
+        case kVK_ANSI_B where mods == .command: session?.confirm(overlay, .beautify)
         case kVK_ANSI_Z: mods.contains(.shift) ? overlay.canvas?.redo() : overlay.canvas?.undo()
         default: return super.performKeyEquivalent(with: event)
         }
@@ -190,6 +193,21 @@ final class OverlayView: NSView {
     private let loupe = LoupeView()
     /// 전체 화면 캡처: 화면 전체를 조금 줄여 가운데에 보여 준다. 영역 손잡이는 쓰지 않는다.
     private var isPreview = false
+    private var help: NSView?
+
+    /// ?: 모든 단축키를 화면 가운데에 보여 주거나 숨긴다.
+    func toggleHelp() {
+        if let help {
+            help.removeFromSuperview()
+            self.help = nil
+            return
+        }
+        let panel = HelpPanel.make()
+        panel.setFrameOrigin(CGPoint(x: ((bounds.width - panel.frame.width) / 2).rounded(),
+                                     y: ((bounds.height - panel.frame.height) / 2).rounded()))
+        addSubview(panel)
+        help = panel
+    }
 
     init(shot: ScreenShot, blank: Bool) {
         self.shot = shot
@@ -411,6 +429,10 @@ final class OverlayView: NSView {
                 guard let self else { return }
                 self.session?.confirm(self, .ocr)
             },
+            .init(symbol: "wand.and.stars", title: L("꾸며서 복사 (⌘B) · 여백·배경·그림자를 넣어 복사")) { [weak self] in
+                guard let self else { return }
+                self.session?.confirm(self, .beautify)
+            },
             .init(symbol: "square.and.arrow.down", title: L("파일로 저장 (⌘S) · 복사하고 탭에도 추가")) { [weak self] in
                 guard let self else { return }
                 self.session?.confirm(self, .save)
@@ -419,7 +441,7 @@ final class OverlayView: NSView {
                 guard let self else { return }
                 self.session?.confirm(self)
             },
-        ], hint: L("안에서 드래그해 일부만 고르기 · 그린 표시는 눌러서 옮기기·⌫ 지우기 · 손잡이·방향키로 영역 조정 · ↩/⌘C 복사 · Esc 취소"))
+        ], hint: L("안에서 드래그해 일부만 고르기 · 그린 표시는 눌러서 옮기기·⌫ 지우기 · ↩/⌘C 복사 · Esc 취소 · ? 단축키 도움말"))
         addSubview(toolbar, positioned: .below, relativeTo: loupe)
         self.toolbar = toolbar
         if !isPreview {
@@ -600,7 +622,73 @@ final class LoupeView: NSView {
         ]
         (label as NSString).draw(at: CGPoint(x: 6, y: side + 3), withAttributes: attributes)
         let hint: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 9), .foregroundColor: NSColor.white.withAlphaComponent(0.7)]
-        (L("C 색 복사 · F 전체 화면 · 클릭 창 선택") as NSString).draw(at: CGPoint(x: 6, y: side + 18), withAttributes: hint)
+        (L("C 색 복사 · F 전체 화면 · 클릭 창 · ? 도움말") as NSString).draw(at: CGPoint(x: 6, y: side + 18), withAttributes: hint)
+    }
+}
+
+/// 캡처 중 ?를 누르면 뜨는 단축키 도움말.
+enum HelpPanel {
+    static func make() -> NSView {
+        let sections: [(String, [(String, String)])] = [
+            (L("영역 고르기"), [
+                (L("드래그"), L("영역 고르기")), (L("클릭"), L("마우스 아래 창 고르기")),
+                ("F", L("전체 화면")), ("C", L("가운데 픽셀 색 복사")), ("Esc", L("취소")),
+            ]),
+            (L("편집"), [
+                ("V A L R O P", L("부분 선택 · 화살표 · 직선 · 네모 · 동그라미 · 자유그리기")),
+                ("T N H M B", L("텍스트 · 번호 · 형광펜 · 모자이크 · 흐리게")),
+                (L("표시 클릭"), L("고르기 · 끌어서 옮기기 · ⌫ 지우기 · 더블클릭 텍스트 고치기")),
+                ("⇧", L("화살표·직선 45도, 네모·동그라미 정사각형")),
+                ("⌘Z  ⇧⌘Z", L("되돌리기 · 다시 실행")),
+                (L("방향키"), L("영역 옮기기 (⇧ 10px, ⌥ 크기)")),
+            ]),
+            (L("마치기"), [
+                ("↩  ⌘C", L("복사하고 탭에 추가")), ("⌘S", L("파일로 저장")), ("⌘P", L("화면에 띄우기")),
+                ("⌘T", L("글자 복사")), ("⌘B", L("꾸며서 복사")),
+            ]),
+        ]
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 4
+        stack.edgeInsets = NSEdgeInsets(top: 16, left: 20, bottom: 16, right: 20)
+        for (title, rows) in sections {
+            let header = NSTextField(labelWithString: title)
+            header.font = .boldSystemFont(ofSize: 13)
+            header.textColor = .white
+            if stack.arrangedSubviews.count > 0 { stack.setCustomSpacing(12, after: stack.arrangedSubviews.last!) }
+            stack.addArrangedSubview(header)
+            for (key, meaning) in rows {
+                let keyLabel = NSTextField(labelWithString: key)
+                keyLabel.font = .monospacedSystemFont(ofSize: 12, weight: .semibold)
+                keyLabel.textColor = .white
+                keyLabel.widthAnchor.constraint(equalToConstant: 110).isActive = true
+                let meaningLabel = NSTextField(labelWithString: meaning)
+                meaningLabel.font = .systemFont(ofSize: 12)
+                meaningLabel.textColor = NSColor.white.withAlphaComponent(0.85)
+                stack.addArrangedSubview(NSStackView(views: [keyLabel, meaningLabel]))
+            }
+        }
+        let footer = NSTextField(labelWithString: L("?를 다시 누르면 닫혀요"))
+        footer.font = .systemFont(ofSize: 11)
+        footer.textColor = NSColor.white.withAlphaComponent(0.6)
+        stack.setCustomSpacing(12, after: stack.arrangedSubviews.last!)
+        stack.addArrangedSubview(footer)
+
+        let background = NSView()
+        background.wantsLayer = true
+        background.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.85).cgColor
+        background.layer?.cornerRadius = 12
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        background.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: background.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: background.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: background.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: background.bottomAnchor),
+        ])
+        background.setFrameSize(stack.fittingSize)
+        return background
     }
 }
 

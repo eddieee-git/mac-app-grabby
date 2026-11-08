@@ -116,18 +116,48 @@ enum ScreenCapturer {
     }
 
     /// 연결된 모든 화면을 찍는다.
-    static func captureAll() async throws -> [ScreenShot] {
+    /// 화면 목록은 자주 바뀌지 않으므로 한 번 받아 두고 쓴다. 화면 구성이 바뀌면 `invalidate()`로 버린다.
+    private static var cachedContent: SCShareableContent?
+
+    static func content(refresh: Bool = false) async throws -> SCShareableContent {
+        if !refresh, let cachedContent { return cachedContent }
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        var shots: [ScreenShot] = []
-        for display in content.displays {
-            if let shot = try await capture(display) { shots.append(shot) }
+        cachedContent = content
+        return content
+    }
+
+    static func invalidate() { cachedContent = nil }
+
+    /// 단축키를 처음 눌렀을 때 늦지 않도록 미리 화면 목록을 받아 둔다.
+    static func warmUp() {
+        guard hasPermission else { return }
+        Task { _ = try? await content(refresh: true) }
+    }
+
+    /// 모든 화면을 동시에 찍는다. 받아 둔 목록이 낡아 실패하면 새로 받아 한 번 더 찍는다.
+    static func captureAll() async throws -> [ScreenShot] {
+        do {
+            return try await captureDisplays(try await content())
+        } catch {
+            return try await captureDisplays(try await content(refresh: true))
         }
-        return shots
+    }
+
+    private static func captureDisplays(_ content: SCShareableContent) async throws -> [ScreenShot] {
+        let displays = content.displays
+        return try await withThrowingTaskGroup(of: (Int, ScreenShot?).self) { group in
+            for (index, display) in displays.enumerated() {
+                group.addTask { @MainActor in (index, try await capture(display)) }
+            }
+            var shots: [(Int, ScreenShot)] = []
+            for try await (index, shot) in group { if let shot { shots.append((index, shot)) } }
+            return shots.sorted { $0.0 < $1.0 }.map(\.1)
+        }
     }
 
     /// 지정한 화면만 찍는다. 화면이 연결되어 있지 않으면 nil.
     static func capture(displayID: CGDirectDisplayID) async throws -> ScreenShot? {
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        let content = try await content()
         guard let display = content.displays.first(where: { $0.displayID == displayID }) else { return nil }
         return try await capture(display)
     }
