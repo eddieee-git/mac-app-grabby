@@ -25,6 +25,7 @@ private struct WelcomeView: View {
     let close: () -> Void
     @ObservedObject private var settings = AppSettings.shared
     @State private var hasPermission = ScreenCapturer.hasPermission
+    @State private var blocked = HotKeyConflicts.blockedBySystem(AppSettings.shared.hotKeys)
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -70,6 +71,22 @@ private struct WelcomeView: View {
                 .padding(4)
             }
 
+            if !blocked.isEmpty {
+                GroupBox {
+                    HStack {
+                        Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L("macOS 스크린샷 단축키 끄기")).bold()
+                            Text(L("%@는 macOS 스크린샷 단축키와 겹쳐요. 키보드 단축키 > 스크린샷에서 그 항목을 꺼 주세요.", blocked.joined(separator: ", ")))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button(L("설정 열기")) { HotKeyConflicts.openSystemShortcutSettings() }
+                    }
+                    .padding(4)
+                }
+            }
+
             GroupBox {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(L("3. 쓰는 방법")).bold()
@@ -92,6 +109,9 @@ private struct WelcomeView: View {
         }
         .padding(20)
         .frame(width: 460)
-        .onReceive(timer) { _ in hasPermission = ScreenCapturer.hasPermission }
+        .onReceive(timer) { _ in
+            hasPermission = ScreenCapturer.hasPermission
+            blocked = HotKeyConflicts.blockedBySystem(settings.hotKeys)
+        }
     }
 }

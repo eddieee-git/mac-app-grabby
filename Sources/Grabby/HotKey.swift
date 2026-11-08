@@ -23,15 +23,16 @@ struct KeyCombo: Codable, Equatable {
     var modifiers: UInt32
     var key: String
 
+    /// 기본 단축키는 ⇧⌘. ⇧⌘3·⇧⌘4는 macOS 스크린샷 단축키와 같아서, 시작 안내와 설정에서 macOS 쪽을 끄도록 안내한다.
     static let defaults: [String: KeyCombo] = {
-        let controlCommand = UInt32(controlKey | cmdKey)
+        let shiftCommand = UInt32(shiftKey | cmdKey)
         return [
-            HotKeyAction.captureArea.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_1), modifiers: controlCommand, key: "1"),
-            HotKeyAction.repeatLastArea.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_2), modifiers: controlCommand, key: "2"),
-            HotKeyAction.captureFullScreen.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_3), modifiers: controlCommand, key: "3"),
-            HotKeyAction.captureWindow.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_4), modifiers: controlCommand, key: "4"),
+            HotKeyAction.captureArea.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_1), modifiers: shiftCommand, key: "1"),
+            HotKeyAction.repeatLastArea.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_2), modifiers: shiftCommand, key: "2"),
+            HotKeyAction.captureFullScreen.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_3), modifiers: shiftCommand, key: "3"),
+            HotKeyAction.captureWindow.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_4), modifiers: shiftCommand, key: "4"),
             // 한국어 자판에서 ₩가 찍히는 키(ANSI 자판의 `)
-            HotKeyAction.whiteboard.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_Grave), modifiers: controlCommand, key: "`"),
+            HotKeyAction.whiteboard.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_Grave), modifiers: shiftCommand, key: "`"),
         ]
     }()
 
@@ -125,6 +126,29 @@ enum HotKeyConflicts {
     static var runningCaptureApps: [String] {
         let ids = NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier)
         return captureApps.filter { app in ids.contains { $0.hasPrefix(app.prefix) } }.map(\.name)
+    }
+
+    /// macOS 스크린샷 단축키 번호(com.apple.symbolichotkeys): ⇧⌘3=28, ⌃⇧⌘3=29, ⇧⌘4=30, ⌃⇧⌘4=31, ⇧⌘5=184
+    private static let systemIDs: [String: Int] = ["⇧⌘3": 28, "⌃⇧⌘3": 29, "⇧⌘4": 30, "⌃⇧⌘4": 31, "⇧⌘5": 184]
+
+    /// 그 macOS 단축키가 지금 켜져 있는지. 설정 값이 없으면 켜진 것으로 본다.
+    static func isSystemShortcutEnabled(_ name: String) -> Bool {
+        guard let id = systemIDs[name] else { return false }
+        let hotkeys = UserDefaults(suiteName: "com.apple.symbolichotkeys")?.dictionary(forKey: "AppleSymbolicHotKeys")
+        guard let entry = hotkeys?[String(id)] as? [String: Any] else { return true }
+        return (entry["enabled"] as? Bool) ?? ((entry["enabled"] as? Int).map { $0 != 0 } ?? true)
+    }
+
+    /// 지금 Grabby 단축키 중에서 켜져 있는 macOS 스크린샷 단축키와 겹치는 것들(예: ["⇧⌘3", "⇧⌘4"]).
+    static func blockedBySystem(_ combos: [String: KeyCombo]) -> [String] {
+        combos.values.compactMap(systemShortcut).filter(isSystemShortcutEnabled).sorted()
+    }
+
+    /// 시스템 설정 > 키보드 > 키보드 단축키를 연다(스크린샷 항목에서 끌 수 있다).
+    static func openSystemShortcutSettings() {
+        let urls = ["x-apple.systempreferences:com.apple.Keyboard-Settings.extension?Shortcuts",
+                    "x-apple.systempreferences:com.apple.preference.keyboard?Shortcuts"]
+        if let url = urls.compactMap(URL.init(string:)).first { NSWorkspace.shared.open(url) }
     }
 
     /// macOS 기본 스크린샷 단축키(⇧⌘3·4·5·6, ⌃⇧⌘3·4)와 같으면 그 이름.

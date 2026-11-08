@@ -239,6 +239,9 @@ enum SelfTest_KeyTests {
         let shiftCommand = UInt32(shiftKey | cmdKey)
         expect(HotKeyConflicts.systemShortcut(KeyCombo(keyCode: UInt32(kVK_ANSI_4), modifiers: shiftCommand, key: "4")) == "⇧⌘4")
         expect(HotKeyConflicts.systemShortcut(KeyCombo.defaults[HotKeyAction.captureArea.rawValue]!) == nil)
+        // 기본값 ⇧⌘3·⇧⌘4는 macOS 단축키와 같다는 걸 알아채야 한다(끄도록 안내하려고).
+        expect(HotKeyConflicts.systemShortcut(KeyCombo.defaults[HotKeyAction.captureFullScreen.rawValue]!) == "⇧⌘3")
+        expect(HotKeyConflicts.systemShortcut(KeyCombo.defaults[HotKeyAction.captureWindow.rawValue]!) == "⇧⌘4")
     }
 
     static func test_defaultShortcutsDoNotCollide() {

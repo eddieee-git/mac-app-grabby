@@ -46,7 +46,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // 다른 캡처 앱이 켜져 있으면 단축키가 겹칠 수 있다고 한 번 알려 준다.
         let others = HotKeyConflicts.runningCaptureApps
-        if !others.isEmpty {
+        let blocked = HotKeyConflicts.blockedBySystem(settings.hotKeys)
+        if !blocked.isEmpty, UserDefaults.standard.bool(forKey: "didShowWelcome") {
+            Toast.show(L("%@는 macOS 스크린샷 단축키와 겹쳐요 · 설정 > 단축키에서 확인해 주세요", blocked.joined(separator: ", ")))
+        } else if !others.isEmpty {
             Toast.show(L("%@이(가) 켜져 있어요 · 단축키가 겹치면 설정에서 바꿔 주세요", others.joined(separator: ", ")))
         }
     }

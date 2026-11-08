@@ -140,6 +140,12 @@ enum Localization {
         "⌘, ⌃, ⌥ 중 하나와 함께 누르세요.": "Press together with ⌘, ⌃ or ⌥.",
         "%@에서 쓰는 단축키예요.": "Already used by %@.",
         // 새 기능
+        "%@는 macOS 스크린샷 단축키와 겹쳐요 · 설정 > 단축키에서 확인해 주세요": "%@ overlaps a macOS screenshot shortcut · Check Settings > Shortcuts",
+        "%@는 macOS 스크린샷 단축키와 겹쳐서 지금은 macOS가 먼저 받아요. 시스템 설정 > 키보드 > 키보드 단축키 > 스크린샷에서 그 항목을 꺼 주세요.":
+            "%@ is also a macOS screenshot shortcut, so macOS takes it first. Turn it off in System Settings > Keyboard > Keyboard Shortcuts > Screenshots.",
+        "키보드 단축키 설정 열기": "Open Keyboard Shortcuts",
+        "macOS 스크린샷 단축키 끄기": "Turn off macOS screenshot shortcuts",
+        "%@는 macOS 스크린샷 단축키와 겹쳐요. 키보드 단축키 > 스크린샷에서 그 항목을 꺼 주세요.": "%@ overlaps a macOS screenshot shortcut. Turn it off in Keyboard Shortcuts > Screenshots.",
         "캡처할 창을 클릭하세요 · 드래그하면 영역 선택 · Esc 취소": "Click a window to capture · Drag to select an area · Esc to cancel",
         "앞에 있는 창 캡처": "Capture Front Window",
         "두 줄": "Two rows",
@@ -238,7 +244,6 @@ enum Localization {
         "동그라미": "Ellipse",
         "번호": "Step",
         "흐리게": "Blur",
-        "%@는 macOS 스크린샷 단축키라 쓸 수 없어요.": "%@ is a macOS screenshot shortcut and can't be used.",
         "%@이(가) 켜져 있어요 · 단축키가 겹치면 설정에서 바꿔 주세요": "%@ is running · Change shortcuts in Settings if they overlap",
         "%@이(가) 켜져 있어요. 같은 단축키를 쓰면 먼저 등록한 앱이 키를 받으니, 겹치지 않게 바꿔 주세요.":
             "%@ is running. If both use the same shortcut, the app that registered first gets it, so pick different keys.",

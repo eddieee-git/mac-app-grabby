@@ -410,8 +410,18 @@ private struct HotKeyEditor: View {
     @State private var monitor: Any?
     @State private var message: String?
     @State private var runningApps = HotKeyConflicts.runningCaptureApps
+    @State private var blocked: [String] = []
 
     var body: some View {
+        if !blocked.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Label(L("%@는 macOS 스크린샷 단축키와 겹쳐서 지금은 macOS가 먼저 받아요. 시스템 설정 > 키보드 > 키보드 단축키 > 스크린샷에서 그 항목을 꺼 주세요.",
+                        blocked.joined(separator: ", ")), systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                Button(L("키보드 단축키 설정 열기")) { HotKeyConflicts.openSystemShortcutSettings() }
+            }
+        }
         if !runningApps.isEmpty {
             Label(L("%@이(가) 켜져 있어요. 같은 단축키를 쓰면 먼저 등록한 앱이 키를 받으니, 겹치지 않게 바꿔 주세요.",
                     runningApps.joined(separator: ", ")), systemImage: "exclamationmark.triangle.fill")
@@ -452,7 +462,10 @@ private struct HotKeyEditor: View {
         .onDisappear(perform: stop)
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
             runningApps = HotKeyConflicts.runningCaptureApps
+            blocked = HotKeyConflicts.blockedBySystem(settings.hotKeys)
         }
+        .onAppear { blocked = HotKeyConflicts.blockedBySystem(settings.hotKeys) }
+        .onChange(of: settings.hotKeys) { _, combos in blocked = HotKeyConflicts.blockedBySystem(combos) }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in stop() }
     }
 
@@ -483,10 +496,7 @@ private struct HotKeyEditor: View {
             message = L("⌘, ⌃, ⌥ 중 하나와 함께 누르세요.")
             return
         }
-        if let system = HotKeyConflicts.systemShortcut(combo) {
-            message = L("%@는 macOS 스크린샷 단축키라 쓸 수 없어요.", system)
-            return
-        }
+
         if let other = HotKeyAction.allCases.first(where: { $0 != action && settings.hotKeys[$0.rawValue] == combo }) {
             message = L("%@에서 쓰는 단축키예요.", other.title)
             return
