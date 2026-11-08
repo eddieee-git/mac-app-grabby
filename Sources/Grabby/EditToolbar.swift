@@ -205,6 +205,8 @@ final class EditToolbar: NSVisualEffectView {
             return true
         }
         image.isTemplate = false
+        // VoiceOver가 색 버튼을 "색 #F38020"처럼 읽도록 한다.
+        image.accessibilityDescription = L("색 %@", AppSettings.hex(color))
         return image
     }
 }

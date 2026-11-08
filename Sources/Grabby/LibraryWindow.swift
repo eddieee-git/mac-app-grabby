@@ -51,7 +51,8 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
         knownNewest = store.items.first?.id
         reloadTabs()
         select(store.items.first?.id)
-        store.indexText()
+        // 켜자마자 CPU를 쓰지 않게 조금 있다가 글자 인식을 시작한다.
+        store.indexText(after: 20)
     }
 
     required init?(coder: NSCoder) { fatalError() }

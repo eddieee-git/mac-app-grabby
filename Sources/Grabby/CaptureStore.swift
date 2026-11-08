@@ -60,7 +60,12 @@ final class CaptureStore {
 
     private convenience init() {
         // 예시 화면을 만들 때는 `-captureFolder <경로>` 인자로 다른 보관함을 쓴다.
-        if let custom = UserDefaults.standard.string(forKey: "captureFolder") {
+        #if DEBUG
+        let custom = UserDefaults.standard.string(forKey: "captureFolder")
+        #else
+        let custom: String? = nil
+        #endif
+        if let custom {
             self.init(directory: URL(fileURLWithPath: custom, isDirectory: true))
             return
         }
@@ -82,6 +87,11 @@ final class CaptureStore {
     func url(for item: CaptureItem) -> URL { directory.appendingPathComponent("\(item.id.uuidString).png") }
     private func originalURL(for item: CaptureItem) -> URL { directory.appendingPathComponent("\(item.id.uuidString).orig.png") }
     private func annotationsURL(for item: CaptureItem) -> URL { directory.appendingPathComponent("\(item.id.uuidString).json") }
+
+    /// 파일 쓰기와 지우기는 이 줄에서 차례대로 한다. 캡처를 마치는 순간 화면이 멈칫하지 않게 하려는 것이다.
+    private let io = DispatchQueue(label: "com.eddieee.Grabby.store", qos: .utility)
+    /// 아직 디스크에 다 쓰지 않은 이미지. 쓰는 동안 읽으면 여기서 준다.
+    private var pending: [URL: CGImage] = [:]
 
     /// 새 캡처를 맨 앞에 넣는다. 보관 개수를 넘겨 지운 캡처 수를 함께 돌려준다.
     @discardableResult
@@ -107,7 +117,7 @@ final class CaptureStore {
             if item.isKept { return true }
             unkept += 1
             if unkept <= limit { return true }
-            delete(item)
+            delete(item, reason: "보관 개수 \(limit)개 초과로 정리")
             removed += 1
             return false
         }
@@ -140,15 +150,30 @@ final class CaptureStore {
         save(notify: false)
     }
 
-    /// 아직 글자를 인식하지 않은 캡처를 하나씩 인식해 둔다(검색용).
-    func indexText() {
-        guard !isIndexing, let item = items.first(where: { $0.text == nil }), let image = image(for: item) else { return }
+    /// 인식해 둔 글자를 모두 지운다(설정에서 글자 검색을 끄거나 지우기를 누를 때).
+    func clearAllText() {
+        for index in items.indices { items[index].text = nil }
+        save(notify: false)
+    }
+
+    /// 아직 글자를 인식하지 않은 캡처를 최근 것부터 하나씩, 사이사이 쉬면서 인식해 둔다(검색용).
+    /// 설정에서 글자 검색을 끄면 하지 않는다.
+    func indexText(after delay: TimeInterval = 0) {
+        guard !isIndexing, AppSettings.shared.textSearch else { return }
         isIndexing = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.indexNext() }
+    }
+
+    private func indexNext() {
+        guard AppSettings.shared.textSearch, let item = items.first(where: { $0.text == nil }), let image = image(for: item) else {
+            isIndexing = false
+            return
+        }
         Task { @MainActor in
             let text = await TextRecognizer.recognize(image)
             self.setText(item.id, text)
-            self.isIndexing = false
-            self.indexText()
+            // 한꺼번에 CPU를 쓰지 않게 다음 캡처까지 잠깐 쉰다.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.indexNext() }
         }
     }
 
@@ -165,7 +190,7 @@ final class CaptureStore {
     @discardableResult
     func removeAll(keepKept: Bool) -> Int {
         let doomed = items.filter { !(keepKept && $0.isKept) }
-        for item in doomed { delete(item) }
+        for item in doomed { delete(item, reason: keepKept ? "모두 닫기(고정 제외)" : "모두 닫기") }
         items.removeAll { item in doomed.contains { $0.id == item.id } }
         save()
         return doomed.count
@@ -173,7 +198,7 @@ final class CaptureStore {
 
     func remove(_ item: CaptureItem) {
         items.removeAll { $0.id == item.id }
-        delete(item)
+        delete(item, reason: "탭 삭제")
         save()
     }
 
@@ -181,55 +206,134 @@ final class CaptureStore {
 
     /// 다시 고칠 수 있는 형태: 원본과 표시. 표시 없이 저장된 캡처는 그 이미지 그대로.
     func editable(for item: CaptureItem) -> (image: CGImage, annotations: [Annotation])? {
-        if let original = load(originalURL(for: item)),
-           let data = try? Data(contentsOf: annotationsURL(for: item)),
-           let annotations = try? JSONDecoder().decode([Annotation].self, from: data) {
+        if let original = load(originalURL(for: item)), let annotations = pendingAnnotations[item.id] ?? loadAnnotations(item) {
             return (original, annotations)
         }
         return image(for: item).map { ($0, []) }
     }
 
+    private var pendingAnnotations: [UUID: [Annotation]] = [:]
+
+    private func loadAnnotations(_ item: CaptureItem) -> [Annotation]? {
+        guard let data = try? Data(contentsOf: annotationsURL(for: item)) else { return nil }
+        return try? JSONDecoder().decode([Annotation].self, from: data)
+    }
+
     func thumbnail(for item: CaptureItem) -> NSImage? {
         if let cached = thumbnails[item.id] { return cached }
-        guard let source = CGImageSourceCreateWithURL(url(for: item) as CFURL, nil),
-              let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                  kCGImageSourceCreateThumbnailFromImageAlways: true,
-                  kCGImageSourceThumbnailMaxPixelSize: 400,
-              ] as CFDictionary) else { return nil }
+        let cg: CGImage?
+        if let image = pending[url(for: item)] {
+            cg = Self.downscale(image, maxPixel: 400)
+        } else if let source = CGImageSourceCreateWithURL(url(for: item) as CFURL, nil) {
+            cg = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceThumbnailMaxPixelSize: 400,
+            ] as CFDictionary)
+        } else {
+            cg = nil
+        }
+        guard let cg else { return nil }
         let image = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
         thumbnails[item.id] = image
         return image
     }
 
+    private static func downscale(_ image: CGImage, maxPixel: Int) -> CGImage? {
+        let ratio = min(1, CGFloat(maxPixel) / CGFloat(max(image.width, image.height)))
+        let w = max(1, Int(CGFloat(image.width) * ratio)), h = max(1, Int(CGFloat(image.height) * ratio))
+        guard let context = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        return context.makeImage()
+    }
+
     private func load(_ url: URL) -> CGImage? {
+        if let image = pending[url] { return image }
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
         return CGImageSourceCreateImageAtIndex(source, 0, nil)
     }
 
     private func writeEditable(_ item: CaptureItem, original: CGImage?, annotations: [Annotation]) {
+        let originalURL = originalURL(for: item), annotationsURL = annotationsURL(for: item)
         if let original, !annotations.isEmpty, let data = try? JSONEncoder().encode(annotations) {
-            write(original, to: originalURL(for: item))
-            try? data.write(to: annotationsURL(for: item), options: .atomic)
+            write(original, to: originalURL)
+            pendingAnnotations[item.id] = annotations
+            io.async {
+                try? data.write(to: annotationsURL, options: .atomic)
+                DispatchQueue.main.async { [weak self] in self?.pendingAnnotations[item.id] = nil }
+            }
         } else {
-            try? FileManager.default.removeItem(at: originalURL(for: item))
-            try? FileManager.default.removeItem(at: annotationsURL(for: item))
+            pending[originalURL] = nil
+            pendingAnnotations[item.id] = nil
+            io.async {
+                try? FileManager.default.removeItem(at: originalURL)
+                try? FileManager.default.removeItem(at: annotationsURL)
+            }
         }
     }
 
-    private func delete(_ item: CaptureItem) {
-        for url in [url(for: item), originalURL(for: item), annotationsURL(for: item)] { try? FileManager.default.removeItem(at: url) }
+    /// 캡처 파일을 지운다. 지운 이유를 기록해 두어, 캡처가 사라졌을 때 원인을 찾을 수 있게 한다.
+    private func delete(_ item: CaptureItem, reason: String) {
+        EventLog.write("삭제 \(item.id.uuidString) (\(item.width)×\(item.height), \(item.isKept ? "고정" : "보통")) — \(reason)")
+        let urls = [url(for: item), originalURL(for: item), annotationsURL(for: item)]
+        for url in urls { pending[url] = nil }
+        pendingAnnotations[item.id] = nil
         thumbnails[item.id] = nil
+        io.async { for url in urls { try? FileManager.default.removeItem(at: url) } }
     }
 
     private func write(_ image: CGImage, to url: URL) {
-        guard let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else { return }
-        CGImageDestinationAddImage(destination, image, nil)
-        CGImageDestinationFinalize(destination)
+        pending[url] = image
+        io.async {
+            if let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) {
+                CGImageDestinationAddImage(destination, image, nil)
+                CGImageDestinationFinalize(destination)
+            }
+            DispatchQueue.main.async { [weak self] in
+                // 그 사이에 같은 자리에 새 이미지를 썼으면 그대로 둔다.
+                if self?.pending[url] === image { self?.pending[url] = nil }
+            }
+        }
     }
 
     private func save(notify: Bool = true) {
-        if let data = try? JSONEncoder().encode(items) { try? data.write(to: indexURL, options: .atomic) }
+        if let data = try? JSONEncoder().encode(items) {
+            let indexURL = indexURL
+            io.async { try? data.write(to: indexURL, options: .atomic) }
+        }
         if notify { NotificationCenter.default.post(name: Self.didChange, object: self) }
+    }
+
+    /// 밀린 파일 쓰기를 모두 끝낼 때까지 기다린다(앱을 끝낼 때, 점검할 때).
+    func flush() { io.sync {} }
+}
+
+/// 캡처 삭제처럼 나중에 원인을 찾을 때 필요한 일을 기록한다. 256KB가 넘으면 앞쪽 절반을 버린다.
+enum EventLog {
+    static let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("Grabby/events.log")
+
+    /// 점검(--self-test) 중에는 실제 기록 파일을 건드리지 않는다.
+    nonisolated(unsafe) static var isEnabled = true
+
+    static func write(_ message: String) {
+        guard isEnabled else { return }
+        let formatter = ISO8601DateFormatter()
+        let line = "\(formatter.string(from: Date())) [\(ProcessInfo.processInfo.processIdentifier)] \(message)\n"
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if let handle = try? FileHandle(forWritingTo: url) {
+            handle.seekToEndOfFile()
+            handle.write(Data(line.utf8))
+            try? handle.close()
+        } else {
+            try? line.write(to: url, atomically: true, encoding: .utf8)
+        }
+        if let size = try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int, size > 256_000,
+           let text = try? String(contentsOf: url, encoding: .utf8) {
+            try? String(text.suffix(text.count / 2)).write(to: url, atomically: true, encoding: .utf8)
+        }
     }
 }
 

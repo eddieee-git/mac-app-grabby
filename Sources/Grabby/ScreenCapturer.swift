@@ -76,6 +76,9 @@ enum WindowList {
     struct ScreenWindow: Equatable {
         let rect: CGRect
         let name: String
+        var id: CGWindowID = 0
+        /// 창 전체가 이 화면 안에 보이는지(그래야 그 창만 따로 찍은 이미지가 고른 영역과 딱 맞는다).
+        var isWhole = false
     }
 
     static func windows(on displayID: CGDirectDisplayID) -> [ScreenWindow] {
@@ -95,7 +98,9 @@ enum WindowList {
             let visible = rect.intersection(screen)
             guard !visible.isNull, visible.width >= 40, visible.height >= 40 else { return nil }
             let name = window[kCGWindowOwnerName as String] as? String ?? ""
-            return ScreenWindow(rect: visible.offsetBy(dx: -screen.minX, dy: -screen.minY).integral, name: name)
+            let id = window[kCGWindowNumber as String] as? CGWindowID ?? 0
+            return ScreenWindow(rect: visible.offsetBy(dx: -screen.minX, dy: -screen.minY).integral, name: name, id: id,
+                                isWhole: visible.integral == rect.integral)
         }
     }
 }
@@ -104,22 +109,22 @@ extension WindowList {
     /// 지금 화면 맨 앞에 보이는 일반 창(전역 좌표, 왼쪽 위 원점)과 앱 이름.
     /// 앞에 있는 앱의 창을 먼저 찾고, 없으면(예: Grabby 창이 앞에 있을 때) 그다음으로 앞에 있는 다른 앱의 창을 쓴다.
     /// 툴팁·알림 같은 작거나 투명한 보조 창은 건너뛴다.
-    static func frontWindow(preferring pid: pid_t?) -> (rect: CGRect, name: String)? {
+    static func frontWindow(preferring pid: pid_t?) -> (rect: CGRect, name: String, id: CGWindowID)? {
         guard let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
             return nil
         }
         let me = ProcessInfo.processInfo.processIdentifier
-        let candidates: [(pid: pid_t, rect: CGRect, name: String)] = info.compactMap { window in
+        let candidates: [(pid: pid_t, rect: CGRect, name: String, id: CGWindowID)] = info.compactMap { window in
             guard let owner = window[kCGWindowOwnerPID as String] as? pid_t, owner != me,
                   (window[kCGWindowLayer as String] as? Int) == 0,
                   (window[kCGWindowAlpha as String] as? Double ?? 1) >= 0.5,
                   let bounds = window[kCGWindowBounds as String] as? NSDictionary,
                   let rect = CGRect(dictionaryRepresentation: bounds),
                   rect.width >= 120, rect.height >= 80 else { return nil }
-            return (owner, rect, window[kCGWindowOwnerName as String] as? String ?? "")
+            return (owner, rect, window[kCGWindowOwnerName as String] as? String ?? "", window[kCGWindowNumber as String] as? CGWindowID ?? 0)
         }
         let pick = candidates.first { $0.pid == pid } ?? candidates.first
-        return pick.map { ($0.rect, $0.name) }
+        return pick.map { ($0.rect, $0.name, $0.id) }
     }
 }
 
@@ -186,6 +191,20 @@ enum ScreenCapturer {
             for try await (index, shot) in group { if let shot { shots.append((index, shot)) } }
             return shots.sorted { $0.0 < $1.0 }.map(\.1)
         }
+    }
+
+    /// 창 하나만 찍는다(겹친 다른 창 없이, 그림자 없이). `size`는 포인트, 결과는 `size × scale` 픽셀.
+    static func captureWindow(_ id: CGWindowID, size: CGSize, scale: CGFloat) async throws -> CGImage? {
+        var window = try await content().windows.first { $0.windowID == id }
+        if window == nil { window = try await content(refresh: true).windows.first { $0.windowID == id } }
+        guard let window else { return nil }
+        let config = SCStreamConfiguration()
+        config.width = Int((size.width * scale).rounded())
+        config.height = Int((size.height * scale).rounded())
+        config.showsCursor = false
+        config.captureResolution = .best
+        config.ignoreShadowsSingleWindow = true
+        return try await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: window), configuration: config)
     }
 
     /// 지정한 화면만 찍는다. 화면이 연결되어 있지 않으면 nil.

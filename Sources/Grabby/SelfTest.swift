@@ -18,6 +18,7 @@ enum SelfTest {
     }
 
     static func run() -> Int32 {
+        EventLog.isEnabled = false
         let suites: [(String, () throws -> Void)] = [
             ("AnnotationTests.codableRoundTrip", SelfTest_AnnotationTests.test_codableRoundTrip),
             ("AnnotationTests.paletteColorStaysSystemColor", SelfTest_AnnotationTests.test_paletteColorStaysSystemColor),
@@ -39,6 +40,7 @@ enum SelfTest {
             ("KeyTests.systemScreenshotShortcutsAreRejected", SelfTest_KeyTests.test_systemScreenshotShortcutsAreRejected),
             ("KeyTests.defaultShortcutsDoNotCollide", SelfTest_KeyTests.test_defaultShortcutsDoNotCollide),
             ("KeyTests.displayText", SelfTest_KeyTests.test_displayText),
+            ("KeyTests.versionComparison", SelfTest_KeyTests.test_versionComparison),
             ("StoreTests.pruneKeepsNewestAndKept", SelfTest_StoreTests.test_pruneKeepsNewestAndKept),
             ("StoreTests.removeAllKeepsKeptWhenAsked", SelfTest_StoreTests.test_removeAllKeepsKeptWhenAsked),
             ("StoreTests.editableKeepsOriginalAndMarks", SelfTest_StoreTests.test_editableKeepsOriginalAndMarks),
@@ -212,6 +214,13 @@ enum SelfTest_KeyTests {
     static func expect(_ c: @autoclosure () throws -> Bool, _ m: String = "", line: Int = #line) { SelfTest.expect(try c(), m, line: line) }
     static func require<T>(_ v: T?) throws -> T { guard let v else { throw SelfTest.Missing() }; return v }
 
+    static func test_versionComparison() {
+        expect(UpdateChecker.isNewer("0.10.0", than: "0.9.1"))
+        expect(UpdateChecker.isNewer("0.3", than: "0.2.9"))
+        expect(!UpdateChecker.isNewer("0.2.0", than: "0.2"))
+        expect(!UpdateChecker.isNewer("0.1.9", than: "0.2.0"))
+    }
+
     private static func key(_ chars: String, code: Int, flags: NSEvent.ModifierFlags = []) -> NSEvent {
         NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil,
                          characters: chars, charactersIgnoringModifiers: chars, isARepeat: false, keyCode: UInt16(code))!
@@ -288,6 +297,7 @@ enum SelfTest_StoreTests {
         let oldest = store.items.last!
         store.setKept(oldest, true)
         let removed = store.prune(limit: 2)
+        store.flush()
         expect(removed == 2)
         // 고정한 가장 오래된 것 + 최신 2개
         expect(store.items.count == 3)
@@ -325,6 +335,7 @@ enum SelfTest_StoreTests {
         defer { try? FileManager.default.removeItem(at: dir) }
         let (item, _) = store.add(image, scale: 2)
         store.setNote(item, "  회의 자료  ")
+        store.flush()
         let reopened = CaptureStore(directory: dir)
         expect(reopened.items.count == 1)
         expect(reopened.items[0].note == "회의 자료")

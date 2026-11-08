@@ -49,7 +49,10 @@ private struct WelcomeView: View {
                     }
                     Spacer()
                     if !hasPermission {
-                        Button(L("권한 켜기")) { ScreenCapturer.requestPermission() }
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Button(L("권한 켜기")) { ScreenCapturer.requestPermission() }
+                            Button(L("켰으면 다시 시작")) { NSApp.sendAction(Selector(("relaunch")), to: nil, from: nil) }
+                        }
                     }
                 }
                 .padding(4)

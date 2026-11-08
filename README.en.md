@@ -1,0 +1,163 @@
+<p align="center">
+  <img src="docs/icon.png" width="96" alt="Grabby icon">
+</p>
+
+<h1 align="center">Grabby</h1>
+
+<p align="center">A no-frills macOS menu bar screen capture app<br>Capture, mark it up in place, and paste right away.</p>
+
+<p align="center">
+  <a href="https://github.com/eddieee-git/Grabby/releases/latest">Download the latest version</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#shortcuts">Shortcuts</a> ·
+  <a href="#faq">FAQ</a> ·
+  <a href="README.md">한국어</a>
+</p>
+
+![A toolbar appears right where you select](docs/screenshots/capture.jpg)
+
+## Features
+
+- **Edit where you capture**: Select an area and a toolbar appears right there. Draw arrows, boxes, numbered steps, or mosaic, then press ↩.
+- **Back to your app instantly**: The capture screen doesn't steal focus, so you can paste with ⌘V in the app you were using.
+- **Captures pile up as tabs**: Reopen past captures to fix marks, and find them by their text or your notes.
+- **Copy text (OCR)**: Recognizes Korean and English text in images.
+- **Beautify**: Adds padding, a background, rounded corners, and a shadow for sharing.
+- **Pin to screen**: Keep a capture floating above other windows while you work.
+
+The app's interface is available in Korean and English (Settings → General → Language). The screenshots show the Korean interface.
+
+| Edit again in the tab window | Beautify |
+|---|---|
+| ![Tab window](docs/screenshots/library.jpg) | ![Beautify](docs/screenshots/beautify.png) |
+
+## Install
+
+1. Download `Grabby-x.y.z.dmg` from [Releases](https://github.com/eddieee-git/Grabby/releases/latest) and open it.
+2. Drag **Grabby** into the **Applications** folder.
+3. In Applications, **right-click Grabby → Open**.
+   Grabby isn't signed with an Apple developer ID, so the first launch shows an "unidentified developer" warning. After opening it once with right-click, it opens normally.
+4. The Getting Started window appears on first launch. Turn on **Screen Recording** permission, then click **Restart After Turning On**.
+
+> Requires an Apple silicon Mac with macOS 14 (Sonoma) or later.
+
+Use the camera icon in the menu bar to capture, open the capture window, or open settings.
+
+## How to use
+
+1. Press **⇧⌘1** and the screen freezes. Drag to select an area, or click to pick a window.
+   - The loupe next to the cursor lets you line up to the pixel. Press **C** to copy the center pixel's color (#RRGGBB).
+2. Draw with the toolbar that appears. Click a mark again to move it, delete it, or change its color.
+3. Press **↩** to copy to the clipboard and add it to the tab window. Paste with **⌘V** in your app.
+
+Press **?** while capturing to see every shortcut.
+
+## Shortcuts
+
+### Global (changeable in Settings)
+
+| Shortcut | Action |
+|---|---|
+| ⇧⌘1 | Capture area |
+| ⇧⌘2 | Capture the last area again (copied without editing) |
+| ⇧⌘3 | Capture full screen |
+| ⇧⌘4 | Pick a window: the window under the mouse is highlighted (at first, the app you were using); click to capture just that window, without windows behind it |
+| ⇧⌘5 | Timer capture (area capture after the set delay, 3 s by default) |
+| ⇧⌘` (shown as ⇧⌘₩) | Whiteboard |
+
+You can also pick 3, 5, or 10 seconds from the menu bar. While counting down, press ⇧⌘5 again or choose **Cancel Timer** to stop.
+
+> **⇧⌘3, ⇧⌘4, and ⇧⌘5 are also the macOS screenshot shortcuts.** To use them with Grabby, turn them off in System Settings → Keyboard → Keyboard Shortcuts → Screenshots. Getting Started and Settings → Shortcuts can open that page for you. Or change Grabby's keys in Settings.
+
+### Capture screen
+
+| Key | Action |
+|---|---|
+| Drag / click | Select an area / pick a window |
+| F | Select the full screen |
+| C | Copy the loupe's center color |
+| Handles, arrow keys | Adjust the area (⇧ 10 px, ⌥ resize) |
+| ↩ or ⌘C | Copy and add to tabs |
+| ⌘S | Save to a file |
+| ⌘P | Pin to screen |
+| ⌘T | Copy text (OCR) |
+| ⌘B | Beautify and copy |
+| ? | Shortcut help |
+| Esc | Clear selection / cancel |
+
+### Editing tools (capture screen and tab window)
+
+| Key | Tool | Key | Tool |
+|---|---|---|---|
+| V | Select part | T | Text |
+| A | Arrow | N | Numbered step |
+| L | Line | H | Highlighter |
+| R | Rectangle | M | Mosaic |
+| O | Ellipse | B | Blur |
+| P | Pen | | |
+
+- Palette colors (6 by default; add up to 12 and reorder them in Settings), a custom color picker, and 3 line widths (text size for text, badge size for steps)
+- Hold ⇧ while drawing for 45° arrows and lines, and square boxes and circles
+- Marks: click to select, drag to move, ⌫ to delete, double-click text to edit
+- ⌘Z undo, ⇧⌘Z redo
+- Shortcuts work with a Korean input source, too
+
+### Tab window
+
+| Key | Action |
+|---|---|
+| ←, → | Previous / next tab |
+| ⌘C | Copy (only the selected part, if any) |
+| ⌘V | Paste a clipboard image as a new tab |
+| ⌘S / ⌘P / ⌘T / ⌘B | Save / pin / copy text / beautify |
+| ⌘+ / ⌘- / ⌘0 / ⌘9 | Zoom in / zoom out / actual size / fit to window |
+| ⌫ | Delete the selected mark, or the tab if none |
+
+The tab window also has crop, notes, ★ keep, search, Save All, and Close All.
+
+## Settings
+
+Menu bar → Settings…
+
+| Tab | Items |
+|---|---|
+| General | Language (한국어/English), theme, launch at login, confirm before deleting tabs, captures to keep, capture sound, timer delay, bring back pinned captures, new version alerts (off by default) |
+| Editing | Palette (add, remove, drag to reorder) and default color, default width, remember last style, capture toolbar (two rows/one row, center/right, hint), capture only the picked window, starting tools, beautify background and padding, whiteboard background |
+| Saving | Default save folder, format (PNG/JPEG), save without a dialog, text recognition for search, clear recognized text |
+| Shortcuts | Change global shortcuts; warnings for other capture apps and macOS screenshot shortcuts |
+| About | Version, open capture folder, Getting Started, Restart |
+
+## FAQ
+
+**Pressing the shortcut opens another capture app instead of Grabby.**
+If an app like Shottr uses the same shortcut, whichever registered first gets the key. Quit that app, or change Grabby's keys in Settings → Shortcuts. Grabby tells you when a known capture app is running.
+
+**Grabby keeps asking for Screen Recording permission.**
+Turn Grabby on in System Settings → Privacy & Security → Screen & System Audio Recording, then click **Restart After Turning On** in Getting Started (or Settings → About → Restart).
+
+**Where are captures stored?**
+Captures in the tab window live in `~/Library/Application Support/Grabby/Captures` (Settings → About → Open Capture Folder). To save files elsewhere, use ⌘S or **Save All** in the tab window. When you exceed the number to keep, the oldest are removed first, but ★ kept captures are never removed.
+
+**Does Grabby send anything over the internet?**
+Not by default. Capture and text recognition (OCR) happen entirely on your Mac, and no account is needed. Only if you turn on **Tell me about new versions** in Settings → General does Grabby ask GitHub for the latest version number, once a day.
+
+**I think I lost a capture.**
+Grabby records every capture deletion and its reason in `~/Library/Application Support/Grabby/events.log`. Please include that file when reporting a problem.
+
+## Build it yourself
+
+Builds with Command Line Tools only, no Xcode.
+
+```bash
+./scripts/build-app.sh      # build/Grabby.app, build/Grabby.dmg
+./scripts/test.sh           # self-tests (doesn't touch your real captures or settings)
+./scripts/release.sh        # test → build → tag → GitHub release with the dmg
+```
+
+- If Screen Recording permission resets after every rebuild, create a local signing certificate once (no Apple account needed): `./scripts/make-signing-cert.sh`
+- The icon is drawn by `scripts/make-icon.swift`.
+- The testing arguments `-showInDock YES` (show in Dock) and `-captureFolder <path>` (use another capture folder) work only in debug builds: `GRABBY_DEBUG=1 ./scripts/build-app.sh`
+
+## License
+
+[MIT](LICENSE)

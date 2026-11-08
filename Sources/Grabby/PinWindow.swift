@@ -5,23 +5,77 @@ import AppKit
 final class PinWindow: NSPanel {
     private static var open: [PinWindow] = []
 
+    private let id: UUID
     private let image: CGImage
     private let scale: CGFloat
     private let imageView = PinImageView()
     private var zoom: CGFloat = 1
 
+    /// 다시 켤 때 되살릴 수 있게 띄운 캡처를 ~/Library/Application Support/Grabby/Pins에 둔다.
+    private struct Saved: Codable {
+        let id: UUID
+        let frame: CGRect
+        let scale: CGFloat
+        let zoom: CGFloat
+        let alpha: CGFloat
+    }
+
+    private static let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("Grabby/Pins", isDirectory: true)
+    private static var indexURL: URL { folder.appendingPathComponent("pins.json") }
+    private static func imageURL(_ id: UUID) -> URL { folder.appendingPathComponent("\(id.uuidString).png") }
+
     /// `frame`은 전역 좌표(왼쪽 아래 원점). 캡처한 자리에 그대로 띄우면 화면에 붙어 있는 것처럼 보인다.
     static func show(_ image: CGImage, scale: CGFloat, at frame: CGRect) {
-        let pin = PinWindow(image: image, scale: scale, frame: frame)
+        let pin = PinWindow(id: UUID(), image: image, scale: scale, frame: frame)
         open.append(pin)
         pin.orderFrontRegardless()
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = imageURL(pin.id)
+        DispatchQueue.global(qos: .utility).async {
+            guard let destination = CGImageDestinationCreateWithURL(url as CFURL, "public.png" as CFString, 1, nil) else { return }
+            CGImageDestinationAddImage(destination, image, nil)
+            CGImageDestinationFinalize(destination)
+        }
+        saveAll()
     }
 
     static func closeAll() {
         for pin in open { pin.close() }
     }
 
-    private init(image: CGImage, scale: CGFloat, frame: CGRect) {
+    /// 띄운 캡처의 자리·크기·투명도를 저장한다(앱을 끝낼 때와 열고 닫을 때).
+    static func saveAll() {
+        let saved = open.map { Saved(id: $0.id, frame: $0.frame, scale: $0.scale, zoom: $0.zoom, alpha: $0.alphaValue) }
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        if let data = try? JSONEncoder().encode(saved) { try? data.write(to: indexURL, options: .atomic) }
+    }
+
+    /// 지난번에 띄워 둔 캡처를 되살린다. 화면 밖으로 나간 것은 보이는 자리로 옮긴다.
+    static func restore() {
+        guard let data = try? Data(contentsOf: indexURL), let saved = try? JSONDecoder().decode([Saved].self, from: data) else { return }
+        for entry in saved {
+            guard let source = CGImageSourceCreateWithURL(imageURL(entry.id) as CFURL, nil),
+                  let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { continue }
+            var frame = entry.frame
+            if !NSScreen.screens.contains(where: { $0.visibleFrame.intersects(frame) }), let screen = NSScreen.main {
+                frame.origin = CGPoint(x: screen.visibleFrame.midX - frame.width / 2, y: screen.visibleFrame.midY - frame.height / 2)
+            }
+            let pin = PinWindow(id: entry.id, image: image, scale: entry.scale, frame: frame)
+            pin.zoom = entry.zoom
+            pin.alphaValue = entry.alpha
+            open.append(pin)
+            pin.orderFrontRegardless()
+        }
+    }
+
+    /// 핀을 다시 켤 때 되살리지 않으면 저장해 둔 것을 지운다.
+    static func discardSaved() {
+        try? FileManager.default.removeItem(at: folder)
+    }
+
+    private init(id: UUID, image: CGImage, scale: CGFloat, frame: CGRect) {
+        self.id = id
         self.image = image
         self.scale = scale
         super.init(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -49,6 +103,8 @@ final class PinWindow: NSPanel {
     override func close() {
         super.close()
         Self.open.removeAll { $0 === self }
+        try? FileManager.default.removeItem(at: Self.imageURL(id))
+        Self.saveAll()
     }
 
     override func keyDown(with event: NSEvent) {

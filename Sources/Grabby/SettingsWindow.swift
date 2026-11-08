@@ -111,6 +111,20 @@ final class AppSettings: ObservableObject {
     /// `Beautifier.paddings`의 번호
     @Published var beautifyPadding: Int { didSet { defaults.set(beautifyPadding, forKey: "beautifyPadding") } }
 
+    /// 캡처 속 글자를 인식해 검색에 쓴다. 끄면 인식하지 않고, 인식해 둔 글자도 지운다.
+    @Published var textSearch: Bool {
+        didSet {
+            defaults.set(textSearch, forKey: "textSearch")
+            if textSearch { CaptureStore.shared.indexText() } else { CaptureStore.shared.clearAllText() }
+        }
+    }
+    /// 새 버전이 있는지 하루에 한 번 GitHub에서 확인한다(처음에는 꺼져 있다).
+    @Published var checkUpdates: Bool { didSet { defaults.set(checkUpdates, forKey: "checkUpdates") } }
+    /// 다시 켤 때 띄워 둔 캡처(핀)를 되살린다.
+    @Published var restorePins: Bool { didSet { defaults.set(restorePins, forKey: "restorePins") } }
+    /// 창을 골라 캡처할 때 겹친 다른 창 없이 그 창만 찍는다.
+    @Published var isolateWindow: Bool { didSet { defaults.set(isolateWindow, forKey: "isolateWindow") } }
+
     /// 타이머 캡처 단축키를 눌렀을 때 기다리는 시간(초).
     @Published var timerSeconds: Int { didSet { defaults.set(timerSeconds, forKey: "timerSeconds") } }
     static let timerOptions = [3, 5, 10]
@@ -216,6 +230,10 @@ final class AppSettings: ObservableObject {
         beautifyBackground = defaults.string(forKey: "beautifyBackground").flatMap(Beautifier.Background.init) ?? .ocean
         beautifyPadding = defaults.object(forKey: "beautifyPadding") as? Int ?? 1
         timerSeconds = defaults.object(forKey: "timerSeconds") as? Int ?? 3
+        textSearch = defaults.object(forKey: "textSearch") as? Bool ?? true
+        checkUpdates = defaults.bool(forKey: "checkUpdates")
+        restorePins = defaults.object(forKey: "restorePins") as? Bool ?? true
+        isolateWindow = defaults.object(forKey: "isolateWindow") as? Bool ?? true
         toolbarLayout = defaults.string(forKey: "toolbarLayout").flatMap(ToolbarLayout.init) ?? .twoRows
         toolbarAlignment = defaults.string(forKey: "toolbarAlignment").flatMap(ToolbarAlignment.init) ?? .center
         toolbarHint = defaults.object(forKey: "toolbarHint") as? Bool ?? true
@@ -249,7 +267,7 @@ final class SettingsWindowController {
 }
 
 private struct SettingsView: View {
-    enum Tab: CaseIterable {
+    enum Tab: String, CaseIterable {
         case general, editing, saving, shortcuts, about
 
         var title: String {
@@ -264,7 +282,8 @@ private struct SettingsView: View {
     }
 
     @ObservedObject var settings: AppSettings
-    @State private var tab: Tab = .general
+    // 마지막에 본 탭을 기억해서 다음에 열 때 그 탭부터 보여 준다.
+    @AppStorage("settingsTab") private var tab: Tab = .general
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -321,6 +340,14 @@ private struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Toggle(L("캡처할 때 소리"), isOn: $settings.captureSound)
+                Toggle(L("다시 켤 때 띄워 둔 캡처 되살리기"), isOn: $settings.restorePins)
+                Toggle(L("새 버전이 나오면 알려 주기"), isOn: $settings.checkUpdates)
+                    .onChange(of: settings.checkUpdates) { _, on in
+                        if on { NSApp.sendAction(Selector(("checkForUpdateNow")), to: nil, from: nil) }
+                    }
+                Text(L("켜면 하루 한 번 GitHub에 최신 버전 번호만 물어봐요. 다른 정보는 보내지 않아요."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Picker(L("타이머 캡처 시간"), selection: $settings.timerSeconds) {
                     ForEach(AppSettings.timerOptions, id: \.self) { Text(L("%ld초", $0)).tag($0) }
                 }
@@ -354,6 +381,7 @@ private struct SettingsView: View {
                 .pickerStyle(.segmented)
                 .id("segment7-\(settings.language.rawValue)")
                 Toggle(L("도구 막대 아래 안내 문구 보이기"), isOn: $settings.toolbarHint)
+                Toggle(L("창을 고르면 뒤에 겹친 창 없이 그 창만 캡처"), isOn: $settings.isolateWindow)
                 Picker(L("캡처할 때 시작 도구"), selection: $settings.captureTool) {
                     ForEach(Tool.allCases, id: \.self) { Text($0.name).tag($0) }
                 }
@@ -401,6 +429,16 @@ private struct SettingsView: View {
                 .pickerStyle(.segmented)
                 Toggle(L("저장 창 없이 기본 폴더에 바로 저장"), isOn: $settings.saveWithoutPanel)
             }
+            Section {
+                Toggle(L("캡처 속 글자를 인식해서 검색하기"), isOn: $settings.textSearch)
+                Text(L("글자 인식은 이 Mac 안에서만 해요. 인식한 글자는 캡처 폴더의 목록 파일에 함께 보관돼요."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button(L("인식한 글자 모두 지우기")) {
+                    CaptureStore.shared.clearAllText()
+                    if settings.textSearch { CaptureStore.shared.indexText(after: 5) }
+                }
+            }
         }
         .formStyle(.grouped)
     }
@@ -429,6 +467,7 @@ private struct SettingsView: View {
             HStack {
                 Button(L("캡처 폴더 열기")) { NSWorkspace.shared.open(captures) }
                 Button(L("시작 안내")) { NSApp.sendAction(Selector(("openWelcome")), to: nil, from: nil) }
+                Button(L("다시 시작")) { NSApp.sendAction(Selector(("relaunch")), to: nil, from: nil) }
                 Link(L("GitHub 저장소"), destination: URL(string: "https://github.com/eddieee-git/Grabby")!)
             }
             .padding(.top, 6)
@@ -518,6 +557,8 @@ private struct ColorSwatches: View {
                     .contentShape(Circle())
                     .onTapGesture { selection = index }
                     .help(AppSettings.hex(palette[index]))
+                    .accessibilityLabel(L("색 %@", AppSettings.hex(palette[index])))
+                    .accessibilityAddTraits(selection == index ? [.isButton, .isSelected] : .isButton)
                     .opacity(dragging == index ? 0.4 : 1)
                     // 끌어서 다른 색 위에 놓으면 그 자리로 옮긴다.
                     .onDrag {

@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.updateHotKeyItems(combos)
         }
         _ = CaptureStore.shared
+        if settings.restorePins { PinWindow.restore() } else { PinWindow.discardSaved() }
         ScreenCapturer.warmUp()
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated {
@@ -40,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 ScreenCapturer.warmUp()
             }
         }
+        checkForUpdate()
         if !UserDefaults.standard.bool(forKey: "didShowWelcome") {
             UserDefaults.standard.set(true, forKey: "didShowWelcome")
             welcome.show()
@@ -87,6 +89,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        PinWindow.saveAll()
+        CaptureStore.shared.flush()
+    }
+
     /// 실행 중에 응용 프로그램 폴더에서 다시 열면 캡처 창을 보여 준다.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         openLibrary()
@@ -114,8 +121,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         buildStatusMenu()
     }
 
+    private var availableUpdate: String?
+
+    /// 설정에서 켰을 때만 확인한다. 새 버전이 있으면 메뉴 맨 위에 알려 준다.
+    @objc func checkForUpdate() { checkForUpdate(force: false) }
+
+    /// 설정에서 방금 켰을 때는 하루를 기다리지 않고 바로 확인한다.
+    @objc func checkForUpdateNow() { checkForUpdate(force: true) }
+
+    private func checkForUpdate(force: Bool) {
+        guard settings.checkUpdates else { return }
+        UpdateChecker.check(force: force) { [weak self] version in
+            guard let self, let version else { return }
+            self.availableUpdate = version
+            self.buildStatusMenu()
+        }
+    }
+
+    @objc private func openReleasePage() { NSWorkspace.shared.open(UpdateChecker.releasesPage) }
+
     private func buildStatusMenu() {
         let menu = NSMenu()
+        if let version = availableUpdate {
+            menu.addItem(item(L("새 버전 있음 (%@)…", version), action: #selector(openReleasePage)))
+            menu.addItem(.separator())
+        }
         let capture = item(HotKeyAction.captureArea.title, action: #selector(captureArea))
         let repeatLast = item(HotKeyAction.repeatLastArea.title, action: #selector(repeatLastArea))
         let fullScreen = item(HotKeyAction.captureFullScreen.title, action: #selector(captureFullScreen))
@@ -139,7 +169,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let timerNow = item(L("타이머 캡처 (설정한 시간)"), action: #selector(captureWithConfiguredTimer))
         hotKeyItems[.captureTimer] = timerNow
         timerMenu.insertItem(timerNow, at: 0)
-        timerMenu.insertItem(.separator(), at: 1)
+        timerMenu.insertItem(item(L("타이머 취소"), action: #selector(cancelTimer)), at: 1)
+        timerMenu.insertItem(.separator(), at: 2)
         menu.addItem(.separator())
         menu.addItem(item(L("캡처 창 열기"), action: #selector(openLibrary)))
         menu.addItem(item(L("띄운 캡처 모두 닫기"), action: #selector(closeAllPins)))
@@ -232,21 +263,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func captureWithTimer(_ sender: NSMenuItem) { startTimer(seconds: sender.tag) }
     @objc private func captureWithConfiguredTimer() { startTimer(seconds: settings.timerSeconds) }
 
-    private var timerRunning = false
+    @objc private func cancelTimer() {
+        guard timerRunning else { return }
+        timerCancelled = true
+        Toast.show(L("타이머를 취소했어요"))
+    }
 
+    /// 화면 기록 권한을 켠 뒤에는 앱을 다시 켜야 적용된다. 잠깐 뒤에 새로 열고 지금 것은 끝낸다.
+    @objc func relaunch() {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", "sleep 1; /usr/bin/open \"$0\"", Bundle.main.bundlePath]
+        try? task.run()
+        NSApp.terminate(nil)
+    }
+
+    private var timerRunning = false
+    private var timerCancelled = false
+
+    /// 타이머 캡처. 세는 동안 타이머 단축키를 한 번 더 누르거나 메뉴의 "타이머 취소"를 누르면 멈춘다.
     private func startTimer(seconds: Int) {
-        guard session == nil, !timerRunning else { return }
+        if timerRunning {
+            cancelTimer()
+            return
+        }
+        guard session == nil else { return }
         if !ScreenCapturer.hasPermission { ScreenCapturer.requestPermission(); return }
         timerRunning = true
+        timerCancelled = false
         var remaining = seconds
         func tick() {
+            if timerCancelled {
+                timerRunning = false
+                return
+            }
             if remaining == 0 {
                 Toast.hide()
                 timerRunning = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in self?.startSession(.area) }
                 return
             }
-            Toast.show(L("%ld초 뒤에 캡처해요", remaining))
+            Toast.show(L("%ld초 뒤에 캡처해요 · 단축키를 다시 누르면 취소", remaining))
             remaining -= 1
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { tick() }
         }
@@ -261,7 +318,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             startSession(.area)
             return
         }
-        startSession(.window(window.rect, window.name))
+        startSession(.window(window.rect, window.name, window.id))
     }
     @objc private func openWhiteboard() { startSession(.whiteboard) }
 

@@ -34,7 +34,7 @@ final class CaptureSession {
     enum Mode: Equatable {
         case area, fullScreen, whiteboard
         /// 앞에 있던 앱의 창(전역 좌표, 왼쪽 위 원점)을 고른 채 시작한다.
-        case window(CGRect, String)
+        case window(CGRect, String, CGWindowID)
     }
 
     private var windows: [OverlayWindow] = []
@@ -50,7 +50,7 @@ final class CaptureSession {
         for window in windows { window.orderFrontRegardless() }
         // 마우스가 있는 화면이 키 입력을 받게 한다. 창 캡처는 그 창이 가장 많이 걸친 화면.
         var active = windows.first { $0.frame.contains(mouse) } ?? windows.first
-        if case let .window(rect, _) = mode {
+        if case let .window(rect, _, _) = mode {
             active = windows.max { a, b in
                 Self.overlapArea(rect, CGDisplayBounds(a.overlay.shot.displayID)) < Self.overlapArea(rect, CGDisplayBounds(b.overlay.shot.displayID))
             } ?? active
@@ -62,11 +62,11 @@ final class CaptureSession {
             overlay.pointerMoved(to: overlay.convert(active!.convertPoint(fromScreen: mouse), from: nil))
         case .fullScreen:
             overlay.presentFullScreen()
-        case let .window(rect, name):
+        case let .window(rect, name, id):
             // 창 고르기: 모든 화면에서 마우스 아래 창을 캡처 영역처럼 보여 주고, 처음에는 앞에 있던 창을 보여 준다.
             for window in windows { window.overlay.pickWindows = true }
             let display = CGDisplayBounds(overlay.shot.displayID)
-            overlay.highlightWindow(rect.offsetBy(dx: -display.minX, dy: -display.minY), name: name,
+            overlay.highlightWindow(rect.offsetBy(dx: -display.minX, dy: -display.minY), name: name, id: id,
                                     pointer: overlay.convert(active!.convertPoint(fromScreen: mouse), from: nil))
         case .whiteboard:
             let size = overlay.bounds.size
@@ -134,7 +134,20 @@ final class OverlayWindow: NSPanel {
         acceptsMouseMovedEvents = true
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         overlay.session = session
-        contentView = overlay
+        // 멈춘 화면은 레이어에 한 번만 깔고, 그 위의 OverlayView는 어둡게 덮는 부분과 테두리만 그린다.
+        // 마우스를 움직일 때마다 큰 화면 이미지를 다시 그리지 않으려는 것이다.
+        let container = NSView(frame: CGRect(origin: .zero, size: shot.screen.frame.size))
+        container.wantsLayer = true
+        let backdrop = NSView(frame: container.bounds)
+        backdrop.wantsLayer = true
+        backdrop.layer?.contents = shot.image
+        backdrop.layer?.contentsGravity = .resize
+        backdrop.autoresizingMask = [.width, .height]
+        overlay.frame = container.bounds
+        overlay.autoresizingMask = [.width, .height]
+        container.addSubview(backdrop)
+        container.addSubview(overlay)
+        contentView = container
         setFrame(shot.screen.frame, display: false)
         makeFirstResponder(overlay)
     }
@@ -292,10 +305,10 @@ final class OverlayView: NSView {
         return hit === loupe ? self : hit
     }
 
-    override func draw(_ dirtyRect: NSRect) {
-        NSImage(cgImage: shot.image, size: bounds.size)
-            .draw(in: bounds, from: .zero, operation: .copy, fraction: 1, respectFlipped: true, hints: nil)
+    override var isOpaque: Bool { false }
 
+    override func draw(_ dirtyRect: NSRect) {
+        // 멈춘 화면은 아래 레이어(backdrop)가 보여 주므로 여기서는 덮는 것만 그린다.
         // 전체 화면 미리 보기는 바탕을 더 어둡게 해서 줄인 화면이 눈에 띄게 한다.
         if isPreview {
             NSColor.black.withAlphaComponent(0.6).setFill()
@@ -391,10 +404,10 @@ final class OverlayView: NSView {
     }
 
     /// 지정한 창을 강조한다(창 고르기를 시작할 때 앞에 있던 창). 마우스를 움직이면 마우스 아래 창으로 바뀐다.
-    func highlightWindow(_ rect: CGRect, name: String, pointer: CGPoint) {
+    func highlightWindow(_ rect: CGRect, name: String, id: CGWindowID, pointer: CGPoint) {
         let visible = rect.intersection(bounds).integral
         guard !visible.isNull, visible.width >= 4, visible.height >= 4 else { return }
-        hovered = WindowList.ScreenWindow(rect: visible, name: name)
+        hovered = WindowList.ScreenWindow(rect: visible, name: name, id: id, isWhole: visible == rect.integral)
         lockedFrom = pointer
         needsDisplay = true
     }
@@ -461,10 +474,12 @@ final class OverlayView: NSView {
             beginEditing(selection)
             return
         }
-        // 드래그하지 않고 클릭했으면 그 자리의 창을 고른다.
-        if let window = windowRects.first(where: { $0.contains(start) }) {
-            selection = window
-            beginEditing(window)
+        // 드래그하지 않고 클릭했으면 그 자리의 창을 고른다. 처음 강조해 둔 앞 창이면 그 창을 쓴다.
+        let clicked = hovered.flatMap { $0.rect.contains(start) ? $0 : nil } ?? screenWindows.first { $0.rect.contains(start) }
+        if let window = clicked {
+            selection = window.rect
+            beginEditing(window.rect)
+            isolate(window)
             return
         }
         reset()
@@ -516,6 +531,19 @@ final class OverlayView: NSView {
         window?.makeFirstResponder(self)
         window?.invalidateCursorRects(for: self)
         needsDisplay = true
+    }
+
+    /// 고른 창만 따로 찍어 캔버스 이미지를 바꾼다. 위에 겹쳐 있던 다른 창이 빠진다.
+    /// 창 전체가 화면 안에 보일 때만 한다(그래야 크기가 고른 영역과 맞는다). 실패하면 화면에서 잘라낸 그대로 둔다.
+    private func isolate(_ window: WindowList.ScreenWindow) {
+        guard AppSettings.shared.isolateWindow, !blank, window.isWhole, window.id != 0 else { return }
+        let expected = window.rect
+        Task { @MainActor [weak self] in
+            guard let self, let image = try? await ScreenCapturer.captureWindow(window.id, size: expected.size, scale: self.shot.scale),
+                  self.selection == expected, let canvas = self.canvas,
+                  image.width == canvas.image.width, image.height == canvas.image.height else { return }
+            canvas.recrop(image, originShift: .zero)
+        }
     }
 
     /// 캔버스에 놓을 이미지: 화면에서 잘라낸 부분, 화이트보드면 같은 크기의 바탕.

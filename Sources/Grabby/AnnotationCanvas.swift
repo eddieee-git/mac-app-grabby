@@ -263,6 +263,9 @@ extension Annotation: Codable {
 /// 이미지를 보여 주고 그 위에 표시를 그리는 뷰. 캡처 직후 화면 위 편집과 탭 창 편집에서 함께 쓴다.
 /// 이미 그린 표시는 클릭해서 고르고, 끌어서 옮기고, ⌫로 지우고, 색·굵기를 바꿀 수 있다. 텍스트는 더블클릭해서 고친다.
 final class AnnotationCanvas: NSView, NSTextFieldDelegate {
+    /// 모자이크·흐리게 계산에 쓰는 CIContext. 만들 때마다 비용이 커서 하나를 같이 쓴다.
+    private static let ciContext = CIContext(options: [.cacheIntermediates: false])
+
     /// 기본 팔레트의 시스템 색(다크 모드에 맞춰 바뀐다). 저장할 때는 이 번호로 남긴다.
     static let systemColors: [NSColor] = [.systemRed, .systemYellow, .systemGreen, .systemBlue, .black, .white]
     /// 도구 막대에 보이는 색. 설정 > 편집에서 더하고 뺄 수 있다.
@@ -713,7 +716,7 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
         filter.setValue(source.clampedToExtent(), forKey: kCIInputImageKey)
         filter.setValue(max(8, 10 * pixelScale), forKey: kCIInputScaleKey)
         guard let output = filter.outputImage?.cropped(to: source.extent) else { return nil }
-        pixelatedCache = CIContext().createCGImage(output, from: source.extent)
+        pixelatedCache = Self.ciContext.createCGImage(output, from: source.extent)
         return pixelatedCache
     }
 
@@ -725,7 +728,7 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
         filter.setValue(source.clampedToExtent(), forKey: kCIInputImageKey)
         filter.setValue(6 * pixelScale, forKey: kCIInputRadiusKey)
         guard let output = filter.outputImage?.cropped(to: source.extent) else { return nil }
-        blurredCache = CIContext().createCGImage(output, from: source.extent)
+        blurredCache = Self.ciContext.createCGImage(output, from: source.extent)
         return blurredCache
     }
 

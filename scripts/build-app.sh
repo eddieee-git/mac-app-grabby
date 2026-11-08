@@ -4,12 +4,15 @@
 set -e
 cd "$(dirname "$0")/.."
 
-swift build -c release --arch arm64
+# 점검용으로 `-showInDock`, `-captureFolder` 인자를 쓰려면 GRABBY_DEBUG=1로 디버그 빌드를 만든다(dmg는 만들지 않음).
+config=release
+[[ -n "$GRABBY_DEBUG" ]] && config=debug
+swift build -c $config --arch arm64
 
 app=build/Grabby.app
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-cp .build/arm64-apple-macosx/release/Grabby "$app/Contents/MacOS/Grabby"
+cp .build/arm64-apple-macosx/$config/Grabby "$app/Contents/MacOS/Grabby"
 cp Resources/Info.plist "$app/Contents/Info.plist"
 cp Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 
@@ -21,6 +24,11 @@ if security find-identity -p codesigning 2>/dev/null | grep -q "$identity" \
     codesign --force --sign "$identity" "$app"
 else
     codesign --force --sign - -r='designated => identifier "com.eddieee.Grabby"' "$app"
+fi
+
+if [[ $config == debug ]]; then
+    echo "$app (디버그)"
+    exit 0
 fi
 
 # 내려받은 쪽에서 응용 프로그램 폴더로 끌어다 놓을 수 있게 바로가기를 함께 넣는다.
