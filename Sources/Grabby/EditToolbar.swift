@@ -23,7 +23,8 @@ final class EditToolbar: NSVisualEffectView {
     private let toolList: [Tool]
 
     /// `hint`가 있으면 버튼 줄 아래에 작은 안내 문구를 보여 준다.
-    init(canvas: AnnotationCanvas, tools toolList: [Tool], actions: [Action], hint: String? = nil) {
+    /// `twoRows`이면 윗줄에 그리기 도구와 되돌리기, 아랫줄에 색·굵기와 마치기 버튼을 둬서 폭을 절반으로 줄인다(캡처 화면).
+    init(canvas: AnnotationCanvas, tools toolList: [Tool], actions: [Action], hint: String? = nil, twoRows: Bool = false) {
         self.canvas = canvas
         self.actions = actions
         self.toolList = toolList
@@ -56,7 +57,7 @@ final class EditToolbar: NSVisualEffectView {
 
         let undo = button(symbol: "arrow.uturn.backward", title: L("되돌리기 (⌘Z)"), action: #selector(undoTapped))
         let redo = button(symbol: "arrow.uturn.forward", title: L("다시 실행 (⇧⌘Z)"), action: #selector(redoTapped))
-        var views: [NSView] = [tools, colors, colorWell, widths, undo, redo]
+        var actionButtons: [NSView] = []
         for (index, action) in actions.enumerated() {
             let b = button(symbol: action.symbol, title: action.title, action: #selector(actionTapped(_:)))
             b.tag = index
@@ -72,13 +73,24 @@ final class EditToolbar: NSVisualEffectView {
                     .foregroundColor: NSColor.white, .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
                 ])
             }
-            views.append(b)
+            actionButtons.append(b)
         }
-        let row = NSStackView(views: views)
-        row.spacing = 8
-        row.setCustomSpacing(4, after: colors)
-        row.setCustomSpacing(6, after: colorWell)
-        var rows: [NSView] = [row]
+        var rows: [NSView]
+        if twoRows {
+            let top = NSStackView(views: [tools, undo, redo])
+            top.spacing = 8
+            let bottom = NSStackView(views: [colors, colorWell, widths] + actionButtons)
+            bottom.spacing = 8
+            bottom.setCustomSpacing(4, after: colors)
+            bottom.setCustomSpacing(14, after: widths)
+            rows = [top, bottom]
+        } else {
+            let row = NSStackView(views: [tools, colors, colorWell, widths, undo, redo] + actionButtons)
+            row.spacing = 8
+            row.setCustomSpacing(4, after: colors)
+            row.setCustomSpacing(6, after: colorWell)
+            rows = [row]
+        }
         if let hint {
             let label = NSTextField(labelWithString: hint)
             label.font = .systemFont(ofSize: 11)

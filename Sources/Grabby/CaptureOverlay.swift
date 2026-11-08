@@ -447,7 +447,7 @@ final class OverlayView: NSView {
                 guard let self else { return }
                 self.session?.confirm(self)
             },
-        ], hint: L("안에서 드래그해 일부만 고르기 · 그린 표시는 눌러서 옮기기·⌫ 지우기 · ↩/⌘C 복사 · Esc 취소 · ? 단축키 도움말"))
+        ], hint: L("↩ 복사 · Esc 취소 · ? 단축키"), twoRows: true)
         addSubview(toolbar, positioned: .below, relativeTo: loupe)
         self.toolbar = toolbar
         if !isPreview {
