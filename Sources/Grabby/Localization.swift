@@ -140,6 +140,17 @@ enum Localization {
         "⌘, ⌃, ⌥ 중 하나와 함께 누르세요.": "Press together with ⌘, ⌃ or ⌥.",
         "%@에서 쓰는 단축키예요.": "Already used by %@.",
         // 새 기능
+        "팔레트 · 기본 색": "Palette · Default Color",
+        "새 색": "New color",
+        "팔레트에 더하기": "Add to Palette",
+        "기본 색 빼기": "Remove Default Color",
+        "팔레트는 %ld색까지예요.": "The palette holds up to %ld colors.",
+        "이미 있는 색이에요.": "That color is already in the palette.",
+        "색을 누르면 기본 색이 되고, 오른쪽 클릭으로 뺄 수 있어요. 최대 %ld색.": "Click a color to make it the default; right-click to remove. Up to %ld colors.",
+        "빼기": "Remove",
+        "타이머 캡처 시간": "Timer Delay",
+        "%ld초": "%ld s",
+        "타이머 캡처 (설정한 시간)": "Timed Capture (set delay)",
         "%@는 macOS 스크린샷 단축키와 겹쳐요 · 설정 > 단축키에서 확인해 주세요": "%@ overlaps a macOS screenshot shortcut · Check Settings > Shortcuts",
         "%@는 macOS 스크린샷 단축키와 겹쳐서 지금은 macOS가 먼저 받아요. 시스템 설정 > 키보드 > 키보드 단축키 > 스크린샷에서 그 항목을 꺼 주세요.":
             "%@ is also a macOS screenshot shortcut, so macOS takes it first. Turn it off in System Settings > Keyboard > Keyboard Shortcuts > Screenshots.",

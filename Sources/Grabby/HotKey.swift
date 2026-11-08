@@ -3,7 +3,7 @@ import Carbon
 
 /// 전역 단축키로 실행할 수 있는 동작.
 enum HotKeyAction: String, CaseIterable {
-    case captureArea, repeatLastArea, captureFullScreen, captureWindow, whiteboard
+    case captureArea, repeatLastArea, captureFullScreen, captureWindow, captureTimer, whiteboard
 
     var title: String {
         switch self {
@@ -11,6 +11,7 @@ enum HotKeyAction: String, CaseIterable {
         case .repeatLastArea: return L("마지막 영역 다시 캡처")
         case .captureFullScreen: return L("전체 화면 캡처")
         case .captureWindow: return L("앞에 있는 창 캡처")
+        case .captureTimer: return L("타이머 캡처")
         case .whiteboard: return L("화이트보드")
         }
     }
@@ -31,6 +32,7 @@ struct KeyCombo: Codable, Equatable {
             HotKeyAction.repeatLastArea.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_2), modifiers: shiftCommand, key: "2"),
             HotKeyAction.captureFullScreen.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_3), modifiers: shiftCommand, key: "3"),
             HotKeyAction.captureWindow.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_4), modifiers: shiftCommand, key: "4"),
+            HotKeyAction.captureTimer.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_5), modifiers: shiftCommand, key: "5"),
             // 한국어 자판에서 ₩가 찍히는 키(ANSI 자판의 `)
             HotKeyAction.whiteboard.rawValue: KeyCombo(keyCode: UInt32(kVK_ANSI_Grave), modifiers: shiftCommand, key: "`"),
         ]

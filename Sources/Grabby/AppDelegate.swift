@@ -73,6 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .repeatLastArea: repeatLastArea()
         case .captureFullScreen: captureFullScreen()
         case .captureWindow: captureFrontWindow()
+        case .captureTimer: startTimer(seconds: settings.timerSeconds)
         case .whiteboard: openWhiteboard()
         }
     }
@@ -135,6 +136,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         timer.submenu = timerMenu
         menu.addItem(timer)
+        let timerNow = item(L("타이머 캡처 (설정한 시간)"), action: #selector(captureWithConfiguredTimer))
+        hotKeyItems[.captureTimer] = timerNow
+        timerMenu.insertItem(timerNow, at: 0)
+        timerMenu.insertItem(.separator(), at: 1)
         menu.addItem(.separator())
         menu.addItem(item(L("캡처 창 열기"), action: #selector(openLibrary)))
         menu.addItem(item(L("띄운 캡처 모두 닫기"), action: #selector(closeAllPins)))
@@ -161,6 +166,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let main = NSMenu()
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
+        let settingsItem = NSMenuItem(title: L("설정…"), action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        appMenu.addItem(settingsItem)
+        appMenu.addItem(.separator())
         appMenu.addItem(NSMenuItem(title: L("Grabby 종료"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         appItem.submenu = appMenu
         main.addItem(appItem)
@@ -220,13 +229,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func captureArea() { startSession(.area) }
 
     /// n초 뒤에 영역 캡처를 시작한다. 남은 시간을 보여 주고, 찍기 직전에 알림을 치운다.
-    @objc private func captureWithTimer(_ sender: NSMenuItem) {
-        guard session == nil else { return }
+    @objc private func captureWithTimer(_ sender: NSMenuItem) { startTimer(seconds: sender.tag) }
+    @objc private func captureWithConfiguredTimer() { startTimer(seconds: settings.timerSeconds) }
+
+    private var timerRunning = false
+
+    private func startTimer(seconds: Int) {
+        guard session == nil, !timerRunning else { return }
         if !ScreenCapturer.hasPermission { ScreenCapturer.requestPermission(); return }
-        var remaining = sender.tag
+        timerRunning = true
+        var remaining = seconds
         func tick() {
             if remaining == 0 {
                 Toast.hide()
+                timerRunning = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in self?.startSession(.area) }
                 return
             }
@@ -240,13 +256,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// 지금 앞에 있는 앱의 맨 앞 창을 고른 채 편집 화면을 연다. 창을 못 찾으면 영역 캡처로 시작한다.
     @objc private func captureFrontWindow() {
-        let front = NSWorkspace.shared.frontmostApplication
-        guard let pid = front?.processIdentifier, pid != ProcessInfo.processInfo.processIdentifier,
-              let rect = WindowList.frontWindow(of: pid) else {
+        let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        guard let window = WindowList.frontWindow(preferring: front) else {
             startSession(.area)
             return
         }
-        startSession(.window(rect))
+        startSession(.window(window.rect, window.name))
     }
     @objc private func openWhiteboard() { startSession(.whiteboard) }
 

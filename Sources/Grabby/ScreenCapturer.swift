@@ -101,21 +101,25 @@ enum WindowList {
 }
 
 extension WindowList {
-    /// 앱의 맨 앞 창 영역(전역 좌표, 왼쪽 위 원점). 창이 없으면 nil.
-    static func frontWindow(of pid: pid_t) -> CGRect? {
+    /// 지금 화면 맨 앞에 보이는 일반 창(전역 좌표, 왼쪽 위 원점)과 앱 이름.
+    /// 앞에 있는 앱의 창을 먼저 찾고, 없으면(예: Grabby 창이 앞에 있을 때) 그다음으로 앞에 있는 다른 앱의 창을 쓴다.
+    /// 툴팁·알림 같은 작거나 투명한 보조 창은 건너뛴다.
+    static func frontWindow(preferring pid: pid_t?) -> (rect: CGRect, name: String)? {
         guard let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
             return nil
         }
-        for window in info {
-            guard (window[kCGWindowOwnerPID as String] as? pid_t) == pid,
-                  let layer = window[kCGWindowLayer as String] as? Int, (0..<20).contains(layer),
-                  (window[kCGWindowAlpha as String] as? Double ?? 1) > 0,
+        let me = ProcessInfo.processInfo.processIdentifier
+        let candidates: [(pid: pid_t, rect: CGRect, name: String)] = info.compactMap { window in
+            guard let owner = window[kCGWindowOwnerPID as String] as? pid_t, owner != me,
+                  (window[kCGWindowLayer as String] as? Int) == 0,
+                  (window[kCGWindowAlpha as String] as? Double ?? 1) >= 0.5,
                   let bounds = window[kCGWindowBounds as String] as? NSDictionary,
                   let rect = CGRect(dictionaryRepresentation: bounds),
-                  rect.width >= 40, rect.height >= 40 else { continue }
-            return rect
+                  rect.width >= 120, rect.height >= 80 else { return nil }
+            return (owner, rect, window[kCGWindowOwnerName as String] as? String ?? "")
         }
-        return nil
+        let pick = candidates.first { $0.pid == pid } ?? candidates.first
+        return pick.map { ($0.rect, $0.name) }
     }
 }
 

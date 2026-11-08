@@ -111,9 +111,57 @@ final class AppSettings: ObservableObject {
     /// `Beautifier.paddings`의 번호
     @Published var beautifyPadding: Int { didSet { defaults.set(beautifyPadding, forKey: "beautifyPadding") } }
 
+    /// 타이머 캡처 단축키를 눌렀을 때 기다리는 시간(초).
+    @Published var timerSeconds: Int { didSet { defaults.set(timerSeconds, forKey: "timerSeconds") } }
+    static let timerOptions = [3, 5, 10]
     @Published var toolbarLayout: ToolbarLayout { didSet { defaults.set(toolbarLayout.rawValue, forKey: "toolbarLayout") } }
     @Published var toolbarAlignment: ToolbarAlignment { didSet { defaults.set(toolbarAlignment.rawValue, forKey: "toolbarAlignment") } }
     @Published var toolbarHint: Bool { didSet { defaults.set(toolbarHint, forKey: "toolbarHint") } }
+
+    /// 팔레트. 항목은 "system:번호"(시스템 색) 또는 "#RRGGBB".
+    @Published var paletteEntries: [String] {
+        didSet {
+            defaults.set(paletteEntries, forKey: "palette")
+            if !palette.indices.contains(defaultColorIndex) { defaultColorIndex = 0 }
+            NotificationCenter.default.post(name: Self.paletteDidChange, object: nil)
+        }
+    }
+    static let paletteDidChange = Notification.Name("GrabbyPaletteDidChange")
+    static let defaultPalette = AnnotationCanvas.systemColors.indices.map { "system:\($0)" }
+    static let paletteLimit = 12
+
+    var palette: [NSColor] { paletteEntries.compactMap(Self.color(from:)) }
+    var defaultColor: NSColor { palette.indices.contains(defaultColorIndex) ? palette[defaultColorIndex] : (palette.first ?? .systemRed) }
+
+    static func color(from entry: String) -> NSColor? {
+        if entry.hasPrefix("system:"), let i = Int(entry.dropFirst(7)), AnnotationCanvas.systemColors.indices.contains(i) {
+            return AnnotationCanvas.systemColors[i]
+        }
+        guard entry.hasPrefix("#"), entry.count == 7, let v = UInt32(entry.dropFirst(), radix: 16) else { return nil }
+        return NSColor(srgbRed: CGFloat((v >> 16) & 0xFF) / 255, green: CGFloat((v >> 8) & 0xFF) / 255, blue: CGFloat(v & 0xFF) / 255, alpha: 1)
+    }
+
+    static func hex(_ color: NSColor) -> String {
+        let c = color.usingColorSpace(.sRGB) ?? .black
+        return String(format: "#%02X%02X%02X", Int((c.redComponent * 255).rounded()), Int((c.greenComponent * 255).rounded()), Int((c.blueComponent * 255).rounded()))
+    }
+
+    /// 팔레트 끝에 색을 더한다. 이미 있는 색이거나 꽉 찼으면 false.
+    @discardableResult
+    func addPaletteColor(_ color: NSColor) -> Bool {
+        let entry = Self.hex(color)
+        guard paletteEntries.count < Self.paletteLimit,
+              !palette.contains(where: { Self.hex($0) == entry }) else { return false }
+        paletteEntries.append(entry)
+        return true
+    }
+
+    /// 색을 뺀다. 마지막 한 색은 남긴다.
+    func removePaletteColor(at index: Int) {
+        guard paletteEntries.count > 1, paletteEntries.indices.contains(index) else { return }
+        paletteEntries.remove(at: index)
+        if defaultColorIndex >= index, defaultColorIndex > 0 { defaultColorIndex -= 1 }
+    }
 
     static let defaultSaveFolder = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask)[0]
 
@@ -142,8 +190,11 @@ final class AppSettings: ObservableObject {
         saveFormat = defaults.string(forKey: "saveFormat").flatMap(SaveFormat.init) ?? .png
         saveWithoutPanel = defaults.bool(forKey: "saveWithoutPanel")
 
+        let savedPalette = (defaults.stringArray(forKey: "palette") ?? Self.defaultPalette).filter { Self.color(from: $0) != nil }
+        let entries = savedPalette.isEmpty ? Self.defaultPalette : savedPalette
+        paletteEntries = entries
         let colorIndex = defaults.object(forKey: "defaultColorIndex") as? Int ?? 0
-        defaultColorIndex = AnnotationCanvas.palette.indices.contains(colorIndex) ? colorIndex : 0
+        defaultColorIndex = entries.indices.contains(colorIndex) ? colorIndex : 0
         let widthIndex = defaults.object(forKey: "defaultWidthIndex") as? Int ?? 1
         defaultWidthIndex = AnnotationCanvas.lineWidths.indices.contains(widthIndex) ? widthIndex : 1
         rememberLastStyle = defaults.bool(forKey: "rememberLastStyle")
@@ -154,6 +205,7 @@ final class AppSettings: ObservableObject {
         boardStyle = defaults.string(forKey: "boardStyle").flatMap(BoardStyle.init) ?? .white
         beautifyBackground = defaults.string(forKey: "beautifyBackground").flatMap(Beautifier.Background.init) ?? .ocean
         beautifyPadding = defaults.object(forKey: "beautifyPadding") as? Int ?? 1
+        timerSeconds = defaults.object(forKey: "timerSeconds") as? Int ?? 3
         toolbarLayout = defaults.string(forKey: "toolbarLayout").flatMap(ToolbarLayout.init) ?? .twoRows
         toolbarAlignment = defaults.string(forKey: "toolbarAlignment").flatMap(ToolbarAlignment.init) ?? .center
         toolbarHint = defaults.object(forKey: "toolbarHint") as? Bool ?? true
@@ -259,6 +311,11 @@ private struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Toggle(L("캡처할 때 소리"), isOn: $settings.captureSound)
+                Picker(L("타이머 캡처 시간"), selection: $settings.timerSeconds) {
+                    ForEach(AppSettings.timerOptions, id: \.self) { Text(L("%ld초", $0)).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .id("segment8-\(settings.language.rawValue)")
             }
         }
         .formStyle(.grouped)
@@ -267,9 +324,7 @@ private struct SettingsView: View {
     private var editing: some View {
         Form {
             Section {
-                LabeledContent(L("기본 색")) {
-                    ColorSwatches(selection: $settings.defaultColorIndex)
-                }
+                PaletteEditor(settings: settings)
                 Picker(L("기본 선 굵기"), selection: $settings.defaultWidthIndex) {
                     Text(L("얇게")).tag(0)
                     Text(L("보통")).tag(1)
@@ -384,20 +439,58 @@ private struct SettingsView: View {
 }
 
 /// 편집 색 팔레트에서 하나를 고른다.
-private struct ColorSwatches: View {
-    @Binding var selection: Int
+/// 팔레트 편집: 색을 누르면 기본 색, 오른쪽 클릭으로 빼기, 색을 골라 더하기, 기본값으로 되돌리기.
+private struct PaletteEditor: View {
+    @ObservedObject var settings: AppSettings
+    @State private var newColor = Color(nsColor: NSColor(srgbRed: 0.953, green: 0.502, blue: 0.125, alpha: 1))
+    @State private var message: String?
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LabeledContent(L("팔레트 · 기본 색")) {
+                ColorSwatches(selection: $settings.defaultColorIndex, settings: settings)
+            }
+            HStack(spacing: 8) {
+                ColorPicker(L("새 색"), selection: $newColor, supportsOpacity: false)
+                    .labelsHidden()
+                Button(L("팔레트에 더하기")) {
+                    let added = settings.addPaletteColor(NSColor(newColor))
+                    message = added ? nil : (settings.paletteEntries.count >= AppSettings.paletteLimit
+                                             ? L("팔레트는 %ld색까지예요.", AppSettings.paletteLimit) : L("이미 있는 색이에요."))
+                }
+                Button(L("기본 색 빼기")) { settings.removePaletteColor(at: settings.defaultColorIndex) }
+                    .disabled(settings.paletteEntries.count <= 1)
+                Spacer()
+                Button(L("기본값으로")) { settings.paletteEntries = AppSettings.defaultPalette; settings.defaultColorIndex = 0 }
+            }
+            Text(message ?? L("색을 누르면 기본 색이 되고, 오른쪽 클릭으로 뺄 수 있어요. 최대 %ld색.", AppSettings.paletteLimit))
+                .font(.caption)
+                .foregroundStyle(message == nil ? Color.secondary : Color.orange)
+        }
+    }
+}
+
+private struct ColorSwatches: View {
+    @Binding var selection: Int
+    @ObservedObject var settings: AppSettings
+
+    var body: some View {
+        let palette = settings.palette
         HStack(spacing: 6) {
-            ForEach(AnnotationCanvas.palette.indices, id: \.self) { index in
+            ForEach(palette.indices, id: \.self) { index in
                 Circle()
-                    .fill(Color(nsColor: AnnotationCanvas.palette[index]))
+                    .fill(Color(nsColor: palette[index]))
                     .overlay(Circle().stroke(Color.gray.opacity(0.6), lineWidth: 1))
                     .frame(width: 18, height: 18)
                     .padding(3)
                     .overlay(Circle().stroke(Color.accentColor, lineWidth: 2).opacity(selection == index ? 1 : 0))
                     .contentShape(Circle())
                     .onTapGesture { selection = index }
+                    .help(AppSettings.hex(palette[index]))
+                    .contextMenu {
+                        Button(L("빼기")) { settings.removePaletteColor(at: index) }
+                            .disabled(palette.count <= 1)
+                    }
             }
         }
     }

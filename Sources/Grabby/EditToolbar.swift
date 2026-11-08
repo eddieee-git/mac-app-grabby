@@ -113,6 +113,7 @@ final class EditToolbar: NSVisualEffectView {
         ])
 
         canvas.onToolChange = { [weak self] in self?.sync() }
+        NotificationCenter.default.addObserver(self, selector: #selector(paletteChanged), name: AppSettings.paletteDidChange, object: nil)
         sync()
         setFrameSize(fittingSize)
     }
@@ -136,6 +137,18 @@ final class EditToolbar: NSVisualEffectView {
     @objc private func toolChanged() {
         if toolList.indices.contains(tools.selectedSegment) { canvas.tool = toolList[tools.selectedSegment] }
         canvas.window?.invalidateCursorRects(for: canvas)
+    }
+
+    /// 설정에서 팔레트를 바꾸면 색 버튼을 다시 만든다.
+    @objc private func paletteChanged() {
+        let palette = AnnotationCanvas.palette
+        colors.segmentCount = palette.count
+        for (i, color) in palette.enumerated() {
+            colors.setImage(Self.swatch(color), forSegment: i)
+            colors.setWidth(0, forSegment: i)
+        }
+        sync()
+        setFrameSize(fittingSize)
     }
 
     @objc private func customColorChanged() {

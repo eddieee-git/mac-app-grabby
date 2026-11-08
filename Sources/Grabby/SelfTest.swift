@@ -24,6 +24,7 @@ enum SelfTest {
             ("AnnotationTests.unknownKindFailsInsteadOfCrashing", SelfTest_AnnotationTests.test_unknownKindFailsInsteadOfCrashing),
             ("AnnotationTests.offsetMovesEveryPoint", SelfTest_AnnotationTests.test_offsetMovesEveryPoint),
             ("AnnotationTests.colorAndWidthChanges", SelfTest_AnnotationTests.test_colorAndWidthChanges),
+            ("AnnotationTests.paletteEntries", SelfTest_AnnotationTests.test_paletteEntries),
             ("CanvasTests.deleteUndoRedo", SelfTest_CanvasTests.test_deleteUndoRedo),
             ("CanvasTests.recolorSelectedIsUndoable", SelfTest_CanvasTests.test_recolorSelectedIsUndoable),
             ("CanvasTests.cropKeepsMarksInPlace", SelfTest_CanvasTests.test_cropKeepsMarksInPlace),
@@ -112,6 +113,17 @@ enum SelfTest_AnnotationTests {
             expect(abs(b.minX - a.minX - 10) < 0.001)
             expect(abs(b.minY - a.minY + 5) < 0.001)
         }
+    }
+
+    static func test_paletteEntries() {
+        // 사용자 팔레트 색은 "#RRGGBB"로 저장하고 그대로 돌아와야 한다(Cloudflare 주황 #F38020).
+        let orange = AppSettings.color(from: "#F38020")
+        expect(orange != nil)
+        expect(AppSettings.hex(orange!) == "#F38020")
+        expect(AppSettings.color(from: "system:0") == .systemRed)
+        expect(AppSettings.color(from: "system:99") == nil)
+        expect(AppSettings.color(from: "#ZZZZZZ") == nil)
+        expect(AppSettings.defaultPalette.count == AnnotationCanvas.systemColors.count)
     }
 
     static func test_colorAndWidthChanges() {

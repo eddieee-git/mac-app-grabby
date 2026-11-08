@@ -34,7 +34,7 @@ final class CaptureSession {
     enum Mode: Equatable {
         case area, fullScreen, whiteboard
         /// 앞에 있던 앱의 창(전역 좌표, 왼쪽 위 원점)을 고른 채 시작한다.
-        case window(CGRect)
+        case window(CGRect, String)
     }
 
     private var windows: [OverlayWindow] = []
@@ -50,7 +50,7 @@ final class CaptureSession {
         for window in windows { window.orderFrontRegardless() }
         // 마우스가 있는 화면이 키 입력을 받게 한다. 창 캡처는 그 창이 가장 많이 걸친 화면.
         var active = windows.first { $0.frame.contains(mouse) } ?? windows.first
-        if case let .window(rect) = mode {
+        if case let .window(rect, _) = mode {
             active = windows.max { a, b in
                 Self.overlapArea(rect, CGDisplayBounds(a.overlay.shot.displayID)) < Self.overlapArea(rect, CGDisplayBounds(b.overlay.shot.displayID))
             } ?? active
@@ -62,13 +62,12 @@ final class CaptureSession {
             overlay.pointerMoved(to: overlay.convert(active!.convertPoint(fromScreen: mouse), from: nil))
         case .fullScreen:
             overlay.presentFullScreen()
-        case let .window(rect):
+        case let .window(rect, name):
             // 창 고르기: 모든 화면에서 마우스 아래 창을 캡처 영역처럼 보여 주고, 처음에는 앞에 있던 창을 보여 준다.
             for window in windows { window.overlay.pickWindows = true }
-            // 가운데가 다른 창에 가려 있어도 앞에 있던 창 그대로를 보여 준다.
             let display = CGDisplayBounds(overlay.shot.displayID)
-            let name = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
-            overlay.highlightWindow(rect.offsetBy(dx: -display.minX, dy: -display.minY), name: name)
+            overlay.highlightWindow(rect.offsetBy(dx: -display.minX, dy: -display.minY), name: name,
+                                    pointer: overlay.convert(active!.convertPoint(fromScreen: mouse), from: nil))
         case .whiteboard:
             let size = overlay.bounds.size
             let board = CGSize(width: min(1200, size.width * 0.8), height: min(800, size.height * 0.75))
@@ -369,6 +368,11 @@ final class OverlayView: NSView {
         guard let canvas else {
             NSCursor.crosshair.set()
             showLoupe(at: p)
+            // 앞 창을 강조해 둔 동안에는 마우스를 40pt 넘게 움직여야 마우스 아래 창으로 바꾼다.
+            if let start = lockedFrom {
+                if hypot(p.x - start.x, p.y - start.y) < 40 { return }
+                lockedFrom = nil
+            }
             let window = dragStart == nil ? screenWindows.first { $0.rect.contains(p) } : nil
             if window != hovered {
                 hovered = window
@@ -387,12 +391,16 @@ final class OverlayView: NSView {
     }
 
     /// 지정한 창을 강조한다(창 고르기를 시작할 때 앞에 있던 창). 마우스를 움직이면 마우스 아래 창으로 바뀐다.
-    func highlightWindow(_ rect: CGRect, name: String) {
+    func highlightWindow(_ rect: CGRect, name: String, pointer: CGPoint) {
         let visible = rect.intersection(bounds).integral
         guard !visible.isNull, visible.width >= 4, visible.height >= 4 else { return }
         hovered = WindowList.ScreenWindow(rect: visible, name: name)
+        lockedFrom = pointer
         needsDisplay = true
     }
+
+    /// 창 고르기를 시작할 때의 마우스 위치. 손이 살짝 떨린 정도로는 앞 창 강조를 바꾸지 않는다.
+    private var lockedFrom: CGPoint?
 
     private func showLoupe(at p: CGPoint) {
         guard !pickWindows else { return }
@@ -815,6 +823,7 @@ final class HandlesView: NSView {
         }
     }
 }
+
 
 
 

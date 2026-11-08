@@ -248,13 +248,13 @@ extension Annotation: Codable {
 
     /// 팔레트 색은 번호로 다시 찾아 시스템 색(다크 모드에 맞춰 바뀌는 색)을 그대로 쓴다.
     private static func components(_ color: NSColor) -> [CGFloat] {
-        if let index = AnnotationCanvas.palette.firstIndex(of: color) { return [-1, CGFloat(index)] }
+        if let index = AnnotationCanvas.systemColors.firstIndex(of: color) { return [-1, CGFloat(index)] }
         let c = color.usingColorSpace(.sRGB) ?? .systemRed
         return [c.redComponent, c.greenComponent, c.blueComponent, c.alphaComponent]
     }
 
     private static func color(from v: [CGFloat]) -> NSColor {
-        if v.count == 2, v[0] == -1, AnnotationCanvas.palette.indices.contains(Int(v[1])) { return AnnotationCanvas.palette[Int(v[1])] }
+        if v.count == 2, v[0] == -1, AnnotationCanvas.systemColors.indices.contains(Int(v[1])) { return AnnotationCanvas.systemColors[Int(v[1])] }
         guard v.count == 4 else { return .systemRed }
         return NSColor(srgbRed: v[0], green: v[1], blue: v[2], alpha: v[3])
     }
@@ -263,7 +263,10 @@ extension Annotation: Codable {
 /// 이미지를 보여 주고 그 위에 표시를 그리는 뷰. 캡처 직후 화면 위 편집과 탭 창 편집에서 함께 쓴다.
 /// 이미 그린 표시는 클릭해서 고르고, 끌어서 옮기고, ⌫로 지우고, 색·굵기를 바꿀 수 있다. 텍스트는 더블클릭해서 고친다.
 final class AnnotationCanvas: NSView, NSTextFieldDelegate {
-    static let palette: [NSColor] = [.systemRed, .systemYellow, .systemGreen, .systemBlue, .black, .white]
+    /// 기본 팔레트의 시스템 색(다크 모드에 맞춰 바뀐다). 저장할 때는 이 번호로 남긴다.
+    static let systemColors: [NSColor] = [.systemRed, .systemYellow, .systemGreen, .systemBlue, .black, .white]
+    /// 도구 막대에 보이는 색. 설정 > 편집에서 더하고 뺄 수 있다.
+    static var palette: [NSColor] { AppSettings.shared.palette }
     /// 선 굵기 단계: 얇게, 보통, 굵게
     static let lineWidths: [CGFloat] = [2, 4, 8]
     /// 같은 단계의 글자 크기
@@ -276,7 +279,7 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
 
     var tool: Tool = .arrow { didSet { commitText(); selectedIndex = nil; onToolChange?() } }
     /// 처음 색과 굵기는 설정의 기본값을 따른다.
-    private(set) var color: NSColor = AnnotationCanvas.palette[AppSettings.shared.defaultColorIndex]
+    private(set) var color: NSColor = AppSettings.shared.defaultColor
     private(set) var widthLevel: Int = AppSettings.shared.defaultWidthIndex
     var lineWidth: CGFloat { Self.lineWidths[widthLevel] }
     var textSize: CGFloat { Self.textSizes[widthLevel] }
@@ -394,7 +397,11 @@ final class AnnotationCanvas: NSView, NSTextFieldDelegate {
 
     // MARK: 색·굵기 (고른 표시가 있으면 그 표시에도 적용)
 
-    func applyColor(_ index: Int) { applyColor(Self.palette[index]) }
+    func applyColor(_ index: Int) {
+        let palette = Self.palette
+        guard palette.indices.contains(index) else { return }
+        applyColor(palette[index])
+    }
 
     /// 팔레트에 없는 색(색 고르기 창에서 고른 색)도 쓸 수 있다.
     func applyColor(_ newColor: NSColor) {
