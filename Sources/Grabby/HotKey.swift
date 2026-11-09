@@ -38,6 +38,11 @@ struct KeyCombo: Codable, Equatable {
         ]
     }()
 
+    /// macOS 스크린샷 단축키와 겹치지 않는 묶음. 시스템 설정을 건드리기 싫을 때 한 번에 바꾼다.
+    static let controlCommandSet: [String: KeyCombo] = defaults.mapValues {
+        KeyCombo(keyCode: $0.keyCode, modifiers: UInt32(controlKey | cmdKey), key: $0.key)
+    }
+
     /// 화이트보드 기본값이 ⌃⌘3이던 때 저장된 값.
     static let oldWhiteboardDefault = KeyCombo(keyCode: UInt32(kVK_ANSI_3), modifiers: UInt32(controlKey | cmdKey), key: "3")
 

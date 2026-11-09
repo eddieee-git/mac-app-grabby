@@ -44,7 +44,7 @@ private struct WelcomeView: View {
                         .foregroundStyle(hasPermission ? .green : .orange)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L("1. 화면 기록 권한")).bold()
-                        Text(hasPermission ? L("켜져 있어요.") : L("시스템 설정에서 Grabby를 켜고, Grabby를 다시 실행해 주세요."))
+                        Text(hasPermission ? L("켜져 있어요.") : L("시스템 설정에서 Grabby를 켜고 \"켰으면 다시 시작\"을 눌러 주세요. 업데이트한 뒤라면 이미 켜져 있어도 한 번 껐다 켜야 할 수 있어요."))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -84,7 +84,11 @@ private struct WelcomeView: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button(L("설정 열기")) { HotKeyConflicts.openSystemShortcutSettings() }
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Button(L("설정 열기")) { HotKeyConflicts.openSystemShortcutSettings() }
+                            Button(L("⌃⌘ 키로 바꾸기")) { settings.hotKeys = KeyCombo.controlCommandSet }
+                                .help(L("macOS 단축키를 끄지 않고, Grabby 단축키를 모두 ⌃⌘1~5, ⌃⌘₩로 바꿔요."))
+                        }
                     }
                     .padding(4)
                 }

@@ -359,8 +359,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CaptureFeedback.flash(result.globalRect)
         let message = pruned > 0 ? L("복사했어요 · 오래된 캡처 %ld개를 정리했어요", pruned) : L("복사했어요 · ⌘V로 붙여 넣기")
         Toast.show(message, image: CaptureStore.shared.thumbnail(for: item))
-        if library == nil { library = LibraryWindowController() }
-        library?.showWithoutFocus()
+        if settings.openLibraryAfterCapture {
+            if library == nil { library = LibraryWindowController() }
+            library?.showWithoutFocus()
+        }
         CaptureStore.shared.indexText()
     }
 

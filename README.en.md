@@ -35,9 +35,15 @@ The app's interface is available in Korean and English (Settings → General →
 
 1. Download `Grabby-x.y.z.dmg` from [Releases](https://github.com/eddieee-git/mac-app-grabby/releases/latest) and open it.
 2. Drag **Grabby** into the **Applications** folder.
-3. In Applications, **right-click Grabby → Open**.
-   Grabby isn't signed with an Apple developer ID, so the first launch shows an "unidentified developer" warning. After opening it once with right-click, it opens normally.
+3. Open Grabby. It isn't signed with an Apple developer ID, so the first launch shows a warning that it can't be opened. Click **Done**, then:
+   - **macOS 15 (Sequoia) or later**: In System Settings → Privacy & Security, scroll to the bottom, click **Open Anyway** next to Grabby, then click **Open**.
+   - **macOS 14 (Sonoma)**: In Applications, **right-click Grabby → Open**.
+
+   After the first time, it opens normally.
 4. The Getting Started window appears on first launch. Turn on **Screen Recording** permission, then click **Restart After Turning On**.
+   If you'd rather keep the macOS screenshot shortcuts, click **Use ⌃⌘ Keys** in Getting Started.
+
+**Updating**: Replace Grabby in Applications with the one from the new dmg. If Grabby asks for Screen Recording permission again, turn Grabby off and on in the Screen & System Audio Recording list, then restart it. Because Grabby has no developer signature, macOS sometimes treats a new version as a different app.
 
 > Requires an Apple silicon Mac with macOS 14 (Sonoma) or later.
 
@@ -67,7 +73,7 @@ Press **?** while capturing to see every shortcut.
 
 You can also pick 3, 5, or 10 seconds from the menu bar. While counting down, press ⇧⌘5 again or choose **Cancel Timer** to stop.
 
-> **⇧⌘3, ⇧⌘4, and ⇧⌘5 are also the macOS screenshot shortcuts.** To use them with Grabby, turn them off in System Settings → Keyboard → Keyboard Shortcuts → Screenshots. Getting Started and Settings → Shortcuts can open that page for you. Or change Grabby's keys in Settings.
+> **⇧⌘3, ⇧⌘4, and ⇧⌘5 are also the macOS screenshot shortcuts.** To use them with Grabby, turn them off in System Settings → Keyboard → Keyboard Shortcuts → Screenshots. Getting Started and Settings → Shortcuts can open that page for you. Or click **Use ⌃⌘ Keys** to switch to ⌃⌘1–5 and ⌃⌘` at once, or change keys one by one.
 
 ### Capture screen
 
@@ -121,10 +127,10 @@ Menu bar → Settings…
 
 | Tab | Items |
 |---|---|
-| General | Language (한국어/English), theme, launch at login, confirm before deleting tabs, captures to keep, capture sound, timer delay, bring back pinned captures, new version alerts (off by default) |
+| General | Language (한국어/English), theme, launch at login, confirm before deleting tabs, captures to keep, capture sound, show the tab window after capturing, timer delay, bring back pinned captures, new version alerts (off by default) |
 | Editing | Palette (add, remove, drag to reorder) and default color, default width, remember last style, capture toolbar (two rows/one row, center/right, hint), capture only the picked window, starting tools, beautify background and padding, whiteboard background |
 | Saving | Default save folder, format (PNG/JPEG), save without a dialog, text recognition for search, clear recognized text |
-| Shortcuts | Change global shortcuts; warnings for other capture apps and macOS screenshot shortcuts |
+| Shortcuts | Change global shortcuts, switch to ⌃⌘ keys at once; warnings for other capture apps and macOS screenshot shortcuts |
 | About | Version, open capture folder, Getting Started, Restart |
 
 ## FAQ
@@ -133,7 +139,7 @@ Menu bar → Settings…
 If another capture app uses the same shortcut, whichever registered first gets the key. Quit that app, or change Grabby's keys in Settings → Shortcuts. Grabby tells you when a known capture app is running.
 
 **Grabby keeps asking for Screen Recording permission.**
-Turn Grabby on in System Settings → Privacy & Security → Screen & System Audio Recording, then click **Restart After Turning On** in Getting Started (or Settings → About → Restart).
+Turn Grabby on in System Settings → Privacy & Security → Screen & System Audio Recording, then click **Restart After Turning On** in Getting Started (or Settings → About → Restart). If you just updated and Grabby is already on in the list, turn it off and on, then restart.
 
 **Where are captures stored?**
 Captures in the tab window live in `~/Library/Application Support/Grabby/Captures` (Settings → About → Open Capture Folder). To save files elsewhere, use ⌘S or **Save All** in the tab window. When you exceed the number to keep, the oldest are removed first, but ★ kept captures are never removed.

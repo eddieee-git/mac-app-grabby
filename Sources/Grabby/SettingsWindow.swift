@@ -124,6 +124,8 @@ final class AppSettings: ObservableObject {
     @Published var restorePins: Bool { didSet { defaults.set(restorePins, forKey: "restorePins") } }
     /// 창을 골라 캡처할 때 겹친 다른 창 없이 그 창만 찍는다.
     @Published var isolateWindow: Bool { didSet { defaults.set(isolateWindow, forKey: "isolateWindow") } }
+    /// 끄면 캡처해도 탭 창을 띄우지 않는다. 이미 열려 있으면 새 탭만 더해진다.
+    @Published var openLibraryAfterCapture: Bool { didSet { defaults.set(openLibraryAfterCapture, forKey: "openLibraryAfterCapture") } }
 
     /// 타이머 캡처 단축키를 눌렀을 때 기다리는 시간(초).
     @Published var timerSeconds: Int { didSet { defaults.set(timerSeconds, forKey: "timerSeconds") } }
@@ -234,6 +236,7 @@ final class AppSettings: ObservableObject {
         checkUpdates = defaults.bool(forKey: "checkUpdates")
         restorePins = defaults.object(forKey: "restorePins") as? Bool ?? true
         isolateWindow = defaults.object(forKey: "isolateWindow") as? Bool ?? true
+        openLibraryAfterCapture = defaults.object(forKey: "openLibraryAfterCapture") as? Bool ?? true
         toolbarLayout = defaults.string(forKey: "toolbarLayout").flatMap(ToolbarLayout.init) ?? .twoRows
         toolbarAlignment = defaults.string(forKey: "toolbarAlignment").flatMap(ToolbarAlignment.init) ?? .center
         toolbarHint = defaults.object(forKey: "toolbarHint") as? Bool ?? true
@@ -340,6 +343,10 @@ private struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Toggle(L("캡처할 때 소리"), isOn: $settings.captureSound)
+                Toggle(L("캡처하면 탭 창 띄우기"), isOn: $settings.openLibraryAfterCapture)
+                Text(L("끄면 복사만 하고, 탭 창은 메뉴바에서 열 때만 보여요. 이미 열려 있으면 새 탭이 더해져요."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Toggle(L("다시 켤 때 띄워 둔 캡처 되살리기"), isOn: $settings.restorePins)
                 Toggle(L("새 버전이 나오면 알려 주기"), isOn: $settings.checkUpdates)
                     .onChange(of: settings.checkUpdates) { _, on in
@@ -360,7 +367,7 @@ private struct SettingsView: View {
 
     private var editing: some View {
         Form {
-            Section {
+            Section(L("색과 굵기")) {
                 PaletteEditor(settings: settings)
                 Picker(L("기본 선 굵기"), selection: $settings.defaultWidthIndex) {
                     Text(L("얇게")).tag(0)
@@ -370,6 +377,8 @@ private struct SettingsView: View {
                 .pickerStyle(.segmented)
                 .id("segment3-\(settings.language.rawValue)")
                 Toggle(L("마지막에 쓴 색과 굵기를 기본값으로 기억"), isOn: $settings.rememberLastStyle)
+            }
+            Section(L("캡처 화면")) {
                 Picker(L("캡처 도구 막대"), selection: $settings.toolbarLayout) {
                     ForEach(AppSettings.ToolbarLayout.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
@@ -385,6 +394,8 @@ private struct SettingsView: View {
                 Picker(L("캡처할 때 시작 도구"), selection: $settings.captureTool) {
                     ForEach(Tool.allCases, id: \.self) { Text($0.name).tag($0) }
                 }
+            }
+            Section(L("꾸며서 복사")) {
                 Picker(L("꾸미기 배경"), selection: $settings.beautifyBackground) {
                     ForEach(Beautifier.Background.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
@@ -395,6 +406,8 @@ private struct SettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 .id("segment4-\(settings.language.rawValue)")
+            }
+            Section(L("화이트보드")) {
                 Picker(L("화이트보드 바탕"), selection: $settings.boardStyle) {
                     ForEach(AppSettings.BoardStyle.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
@@ -406,6 +419,8 @@ private struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        // 묶음이 늘어 길어졌으니, 작은 화면에서도 창이 넘치지 않게 높이를 정하고 안에서 스크롤한다.
+        .frame(height: min(640, (NSScreen.main?.visibleFrame.height ?? 800) - 140))
     }
 
     private var saving: some View {
@@ -596,7 +611,11 @@ private struct HotKeyEditor: View {
                         blocked.joined(separator: ", ")), systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)
-                Button(L("키보드 단축키 설정 열기")) { HotKeyConflicts.openSystemShortcutSettings() }
+                HStack {
+                    Button(L("키보드 단축키 설정 열기")) { HotKeyConflicts.openSystemShortcutSettings() }
+                    Button(L("⌃⌘ 키로 바꾸기")) { settings.hotKeys = KeyCombo.controlCommandSet }
+                        .help(L("macOS 단축키를 끄지 않고, Grabby 단축키를 모두 ⌃⌘1~5, ⌃⌘₩로 바꿔요."))
+                }
             }
         }
         if !runningApps.isEmpty {
