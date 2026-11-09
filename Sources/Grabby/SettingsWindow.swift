@@ -468,7 +468,7 @@ private struct SettingsView: View {
                 Button(L("캡처 폴더 열기")) { NSWorkspace.shared.open(captures) }
                 Button(L("시작 안내")) { NSApp.sendAction(Selector(("openWelcome")), to: nil, from: nil) }
                 Button(L("다시 시작")) { NSApp.sendAction(Selector(("relaunch")), to: nil, from: nil) }
-                Link(L("GitHub 저장소"), destination: URL(string: "https://github.com/eddieee-git/Grabby")!)
+                Link(L("GitHub 저장소"), destination: URL(string: "https://github.com/eddieee-git/mac-app-grabby")!)
             }
             .padding(.top, 6)
         }

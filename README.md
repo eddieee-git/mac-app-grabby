@@ -7,7 +7,7 @@
 <p align="center">필요한 기능만 담은 macOS 메뉴바 화면 캡처 앱<br>찍고, 그 자리에서 그리고, 바로 붙여 넣으세요.</p>
 
 <p align="center">
-  <a href="https://github.com/eddieee-git/Grabby/releases/latest">최신 버전 내려받기</a> ·
+  <a href="https://github.com/eddieee-git/mac-app-grabby/releases/latest">최신 버전 내려받기</a> ·
   <a href="#설치">설치</a> ·
   <a href="#단축키">단축키</a> ·
   <a href="#자주-묻는-질문">자주 묻는 질문</a> ·
@@ -31,7 +31,7 @@
 
 ## 설치
 
-1. [Releases](https://github.com/eddieee-git/Grabby/releases/latest)에서 `Grabby-x.y.z.dmg`를 내려받아 열어요.
+1. [Releases](https://github.com/eddieee-git/mac-app-grabby/releases/latest)에서 `Grabby-x.y.z.dmg`를 내려받아 열어요.
 2. **Grabby**를 **Applications** 폴더로 끌어다 놓아요.
 3. 응용 프로그램 폴더에서 Grabby를 **오른쪽 클릭 → 열기**를 눌러요.
    Apple 개발자 서명이 없는 앱이라 처음 한 번은 "확인되지 않은 개발자" 경고가 나와요. 오른쪽 클릭으로 열면 그다음부터는 그냥 열려요.

@@ -7,7 +7,7 @@
 <p align="center">A no-frills macOS menu bar screen capture app<br>Capture, mark it up in place, and paste right away.</p>
 
 <p align="center">
-  <a href="https://github.com/eddieee-git/Grabby/releases/latest">Download the latest version</a> ·
+  <a href="https://github.com/eddieee-git/mac-app-grabby/releases/latest">Download the latest version</a> ·
   <a href="#install">Install</a> ·
   <a href="#shortcuts">Shortcuts</a> ·
   <a href="#faq">FAQ</a> ·
@@ -33,7 +33,7 @@ The app's interface is available in Korean and English (Settings → General →
 
 ## Install
 
-1. Download `Grabby-x.y.z.dmg` from [Releases](https://github.com/eddieee-git/Grabby/releases/latest) and open it.
+1. Download `Grabby-x.y.z.dmg` from [Releases](https://github.com/eddieee-git/mac-app-grabby/releases/latest) and open it.
 2. Drag **Grabby** into the **Applications** folder.
 3. In Applications, **right-click Grabby → Open**.
    Grabby isn't signed with an Apple developer ID, so the first launch shows an "unidentified developer" warning. After opening it once with right-click, it opens normally.

@@ -4,8 +4,8 @@ import AppKit
 /// 보내는 것은 공개 API 요청 하나뿐이고, 저장소가 비공개거나 인터넷이 없으면 조용히 넘어간다.
 @MainActor
 enum UpdateChecker {
-    static let latestURL = URL(string: "https://api.github.com/repos/eddieee-git/Grabby/releases/latest")!
-    static let releasesPage = URL(string: "https://github.com/eddieee-git/Grabby/releases/latest")!
+    static let latestURL = URL(string: "https://api.github.com/repos/eddieee-git/mac-app-grabby/releases/latest")!
+    static let releasesPage = URL(string: "https://github.com/eddieee-git/mac-app-grabby/releases/latest")!
     private static let lastCheckKey = "lastUpdateCheck"
 
     /// 새 버전이 있으면 그 버전 문자열을 돌려준다. 하루에 한 번만 묻는다(force면 바로).
