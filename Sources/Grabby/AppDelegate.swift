@@ -265,7 +265,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func cancelTimer() {
         guard timerRunning else { return }
-        timerCancelled = true
+        timerGeneration += 1
+        timerRunning = false
+        Countdown.hide()
         Toast.show(L("타이머를 취소했어요"))
     }
 
@@ -279,7 +281,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var timerRunning = false
-    private var timerCancelled = false
+    /// 취소한 뒤 바로 다시 시작해도 이전 타이머가 이어서 세지 않도록 차례 번호로 구분한다.
+    private var timerGeneration = 0
 
     /// 타이머 캡처. 세는 동안 타이머 단축키를 한 번 더 누르거나 메뉴의 "타이머 취소"를 누르면 멈춘다.
     private func startTimer(seconds: Int) {
@@ -290,20 +293,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard session == nil else { return }
         if !ScreenCapturer.hasPermission { ScreenCapturer.requestPermission(); return }
         timerRunning = true
-        timerCancelled = false
+        timerGeneration += 1
+        let generation = timerGeneration
         var remaining = seconds
+        Toast.hide()
         func tick() {
-            if timerCancelled {
-                timerRunning = false
-                return
-            }
+            guard generation == timerGeneration else { return }
             if remaining == 0 {
-                Toast.hide()
+                Countdown.hide()
                 timerRunning = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in self?.startSession(.area) }
                 return
             }
-            Toast.show(L("%ld초 뒤에 캡처해요 · 단축키를 다시 누르면 취소", remaining))
+            Countdown.show(remaining)
             remaining -= 1
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { tick() }
         }

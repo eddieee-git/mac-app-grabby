@@ -140,6 +140,7 @@ enum Localization {
         "⌘, ⌃, ⌥ 중 하나와 함께 누르세요.": "Press together with ⌘, ⌃ or ⌥.",
         "%@에서 쓰는 단축키예요.": "Already used by %@.",
         // 새 기능
+        "단축키를 다시 누르면 취소": "Press the shortcut again to cancel",
         "⌃⌘ 키로 바꾸기": "Use ⌃⌘ Keys",
         "macOS 단축키를 끄지 않고, Grabby 단축키를 모두 ⌃⌘1~5, ⌃⌘₩로 바꿔요.": "Keeps the macOS shortcuts and changes all Grabby shortcuts to ⌃⌘1–5 and ⌃⌘`.",
         "시스템 설정에서 Grabby를 켜고 \"켰으면 다시 시작\"을 눌러 주세요. 업데이트한 뒤라면 이미 켜져 있어도 한 번 껐다 켜야 할 수 있어요.": "Turn on Grabby in System Settings, then click \"Restart After Turning On.\" After an update, you may need to turn it off and on again even if it's already on.",
@@ -157,7 +158,6 @@ enum Localization {
         "캡처 속 글자를 인식해서 검색하기": "Recognize text in captures for search",
         "글자 인식은 이 Mac 안에서만 해요. 인식한 글자는 캡처 폴더의 목록 파일에 함께 보관돼요.": "Text is recognized on this Mac only and kept in the capture folder's index file.",
         "인식한 글자 모두 지우기": "Clear All Recognized Text",
-        "%ld초 뒤에 캡처해요 · 단축키를 다시 누르면 취소": "Capturing in %ld s · Press the shortcut again to cancel",
         "타이머를 취소했어요": "Timer canceled",
         "타이머 취소": "Cancel Timer",
         "켰으면 다시 시작": "Restart After Turning On",

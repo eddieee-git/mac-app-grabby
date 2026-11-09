@@ -559,6 +559,15 @@ private struct ColorSwatches: View {
     @ObservedObject var settings: AppSettings
     @State private var dragging: Int?
 
+    /// 색 바깥에 놓거나 끌기를 취소하면 놓는 쪽 알림이 오지 않는다. 버튼을 떼면 흐린 표시를 푼다.
+    private func clearDraggingWhenReleased() {
+        Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { timer in
+            guard NSEvent.pressedMouseButtons & 1 == 0 else { return }
+            timer.invalidate()
+            MainActor.assumeIsolated { dragging = nil }
+        }
+    }
+
     var body: some View {
         let palette = settings.palette
         HStack(spacing: 6) {
@@ -578,6 +587,7 @@ private struct ColorSwatches: View {
                     // 끌어서 다른 색 위에 놓으면 그 자리로 옮긴다.
                     .onDrag {
                         dragging = index
+                        clearDraggingWhenReleased()
                         return NSItemProvider(object: String(index) as NSString)
                     }
                     .onDrop(of: [.text], delegate: SwatchDrop(target: index, dragging: $dragging, settings: settings))

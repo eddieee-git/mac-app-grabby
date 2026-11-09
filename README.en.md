@@ -71,7 +71,7 @@ Press **?** while capturing to see every shortcut.
 | ⇧⌘5 | Timer capture (area capture after the set delay, 3 s by default) |
 | ⇧⌘` (shown as ⇧⌘₩) | Whiteboard |
 
-You can also pick 3, 5, or 10 seconds from the menu bar. While counting down, press ⇧⌘5 again or choose **Cancel Timer** to stop.
+You can also pick 3, 5, or 10 seconds from the menu bar. The remaining seconds appear large in the middle of the screen. While counting down, press ⇧⌘5 again or choose **Cancel Timer** to stop.
 
 > **⇧⌘3, ⇧⌘4, and ⇧⌘5 are also the macOS screenshot shortcuts.** To use them with Grabby, turn them off in System Settings → Keyboard → Keyboard Shortcuts → Screenshots. Getting Started and Settings → Shortcuts can open that page for you. Or click **Use ⌃⌘ Keys** to switch to ⌃⌘1–5 and ⌃⌘` at once, or change keys one by one.
 
