@@ -130,7 +130,7 @@ Menu bar → Settings…
 ## FAQ
 
 **Pressing the shortcut opens another capture app instead of Grabby.**
-If an app like Shottr uses the same shortcut, whichever registered first gets the key. Quit that app, or change Grabby's keys in Settings → Shortcuts. Grabby tells you when a known capture app is running.
+If another capture app uses the same shortcut, whichever registered first gets the key. Quit that app, or change Grabby's keys in Settings → Shortcuts. Grabby tells you when a known capture app is running.
 
 **Grabby keeps asking for Screen Recording permission.**
 Turn Grabby on in System Settings → Privacy & Security → Screen & System Audio Recording, then click **Restart After Turning On** in Getting Started (or Settings → About → Restart).
