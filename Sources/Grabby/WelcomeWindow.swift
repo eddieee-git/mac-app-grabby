@@ -13,11 +13,14 @@ final class WelcomeWindowController {
             w.styleMask = [.titled, .closable]
             w.title = L("Grabby 시작 안내")
             w.isReleasedWhenClosed = false
-            w.center()
             window = w
         }
         NSApp.activate(ignoringOtherApps: true)
-        window?.makeKeyAndOrderFront(nil)
+        guard let window else { return }
+        // SwiftUI 내용의 크기가 정해진 뒤에 가운데로 옮긴다. 먼저 옮기면 작은 크기 기준으로 잡혀 한쪽으로 치우친다.
+        window.layoutIfNeeded()
+        window.center()
+        window.makeKeyAndOrderFront(nil)
     }
 }
 
