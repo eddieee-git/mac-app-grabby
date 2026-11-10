@@ -77,6 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .captureWindow: captureFrontWindow()
         case .captureTimer: startTimer(seconds: settings.timerSeconds)
         case .whiteboard: openWhiteboard()
+        case .readCode: readCode()
         }
     }
 
@@ -151,12 +152,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let fullScreen = item(HotKeyAction.captureFullScreen.title, action: #selector(captureFullScreen))
         let frontWindow = item(HotKeyAction.captureWindow.title, action: #selector(captureFrontWindow))
         let whiteboard = item(HotKeyAction.whiteboard.title, action: #selector(openWhiteboard))
-        hotKeyItems = [.captureArea: capture, .repeatLastArea: repeatLast, .captureFullScreen: fullScreen, .captureWindow: frontWindow, .whiteboard: whiteboard]
+        let qr = item(HotKeyAction.readCode.title, action: #selector(readCode))
+        hotKeyItems = [.captureArea: capture, .repeatLastArea: repeatLast, .captureFullScreen: fullScreen, .captureWindow: frontWindow, .whiteboard: whiteboard, .readCode: qr]
         menu.addItem(capture)
         menu.addItem(repeatLast)
         menu.addItem(fullScreen)
         menu.addItem(frontWindow)
         menu.addItem(whiteboard)
+        menu.addItem(qr)
         let timer = NSMenuItem(title: L("타이머 캡처"), action: nil, keyEquivalent: "")
         let timerMenu = NSMenu()
         for seconds in [3, 5, 10] {
@@ -258,6 +261,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func captureArea() { startSession(.area) }
+    @objc private func readCode() { startSession(.qr) }
 
     /// n초 뒤에 영역 캡처를 시작한다. 남은 시간을 보여 주고, 찍기 직전에 알림을 치운다.
     @objc private func captureWithTimer(_ sender: NSMenuItem) { startTimer(seconds: sender.tag) }
@@ -384,6 +388,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     Toast.show(L("글자를 복사했어요 · %@", String(firstLine.prefix(40))))
                 }
                 returnToPreviousApp()
+            }
+        case .qr:
+            // 값만 복사하고 탭에는 넣지 않는다.
+            Task { @MainActor in
+                let values = await CodeReader.read(result.image)
+                returnToPreviousApp()
+                CodeReader.handle(values)
             }
         case .save:
             save(result)

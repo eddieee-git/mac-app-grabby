@@ -22,6 +22,7 @@
 - **Back to your app instantly**: The capture screen doesn't steal focus, so you can paste with ⌘V in the app you were using.
 - **Captures pile up as tabs**: Reopen past captures to fix marks, and find them by their text or your notes.
 - **Copy text (OCR)**: Recognizes Korean and English text in images.
+- **Read QR codes**: Drag over a QR code on screen to copy its value; links open right in your browser.
 - **Beautify**: Adds padding, a background, rounded corners, and a shadow for sharing.
 - **Pin to screen**: Keep a capture floating above other windows while you work.
 
@@ -70,6 +71,7 @@ Press **?** while capturing to see every shortcut.
 | ⇧⌘4 | Pick a window: the window under the mouse is highlighted (at first, the app you were using); click to capture just that window, without windows behind it |
 | ⇧⌘5 | Timer capture (area capture after the set delay, 3 s by default) |
 | ⇧⌘` (shown as ⇧⌘₩) | Whiteboard |
+| ⇧⌘6 | Read QR code: drag over a QR code to copy its value; links open in your browser |
 
 You can also pick 3, 5, or 10 seconds from the menu bar. The remaining seconds appear large in the middle of the screen. While counting down, press ⇧⌘5 again or choose **Cancel Timer** to stop.
 
@@ -88,6 +90,7 @@ You can also pick 3, 5, or 10 seconds from the menu bar. The remaining seconds a
 | ⌘P | Pin to screen |
 | ⌘T | Copy text (OCR) |
 | ⌘B | Beautify and copy |
+| ⌘R | Read QR |
 | ? | Shortcut help |
 | Esc | Clear selection / cancel |
 
@@ -115,7 +118,7 @@ You can also pick 3, 5, or 10 seconds from the menu bar. The remaining seconds a
 | ←, → | Previous / next tab |
 | ⌘C | Copy (only the selected part, if any) |
 | ⌘V | Paste a clipboard image as a new tab |
-| ⌘S / ⌘P / ⌘T / ⌘B | Save / pin / copy text / beautify |
+| ⌘S / ⌘P / ⌘T / ⌘B / ⌘R | Save / pin / copy text / beautify / read QR |
 | ⌘+ / ⌘- / ⌘0 / ⌘9 | Zoom in / zoom out / actual size / fit to window |
 | ⌫ | Delete the selected mark, or the tab if none |
 
@@ -127,7 +130,7 @@ Menu bar → Settings…
 
 | Tab | Items |
 |---|---|
-| General | Language (한국어/English), theme, launch at login, confirm before deleting tabs, captures to keep, capture sound, show the tab window after capturing, timer delay, bring back pinned captures, new version alerts (off by default) |
+| General | Language (한국어/English), theme, launch at login, confirm before deleting tabs, captures to keep, capture sound, show the tab window after capturing, timer delay, bring back pinned captures, open QR links right away, new version alerts (off by default) |
 | Editing | Palette (add, remove, drag to reorder) and default color, default width, remember last style, capture toolbar (two rows/one row, center/right, hint), capture only the picked window, starting tools, beautify background and padding, whiteboard background |
 | Saving | Default save folder, format (PNG/JPEG), save without a dialog, text recognition for search, clear recognized text |
 | Shortcuts | Change global shortcuts, switch to ⌃⌘ keys at once; warnings for other capture apps and macOS screenshot shortcuts |
@@ -145,7 +148,10 @@ Turn Grabby on in System Settings → Privacy & Security → Screen & System Aud
 Captures in the tab window live in `~/Library/Application Support/Grabby/Captures` (Settings → About → Open Capture Folder). To save files elsewhere, use ⌘S or **Save All** in the tab window. When you exceed the number to keep, the oldest are removed first, but ★ kept captures are never removed.
 
 **Does Grabby send anything over the internet?**
-Not by default. Capture and text recognition (OCR) happen entirely on your Mac, and no account is needed. Only if you turn on **Tell me about new versions** in Settings → General does Grabby ask GitHub for the latest version number, once a day.
+Not by default. Capture, text recognition (OCR), and QR reading happen entirely on your Mac, and no account is needed. Only if you turn on **Tell me about new versions** in Settings → General does Grabby ask GitHub for the latest version number, once a day.
+
+**I'm uneasy about QR links opening by themselves.**
+Grabby opens only web addresses (http, https); file addresses and addresses that open other apps are only copied. To stop opening links right away, turn off **Open QR code links in the browser right away** in Settings → General. If there are several QR codes, none are opened and all are copied.
 
 **I think I lost a capture.**
 Grabby records every capture deletion and its reason in `~/Library/Application Support/Grabby/events.log`. Please include that file when reporting a problem.

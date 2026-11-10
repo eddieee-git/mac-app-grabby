@@ -1,3 +1,4 @@
+import Carbon
 import AppKit
 import Combine
 import ServiceManagement
@@ -125,6 +126,8 @@ final class AppSettings: ObservableObject {
     /// 창을 골라 캡처할 때 겹친 다른 창 없이 그 창만 찍는다.
     @Published var isolateWindow: Bool { didSet { defaults.set(isolateWindow, forKey: "isolateWindow") } }
     /// 끄면 캡처해도 탭 창을 띄우지 않는다. 이미 열려 있으면 새 탭만 더해진다.
+    /// QR 코드가 웹 주소 하나면 바로 브라우저로 연다.
+    @Published var openCodeLinks: Bool { didSet { defaults.set(openCodeLinks, forKey: "openCodeLinks") } }
     @Published var openLibraryAfterCapture: Bool { didSet { defaults.set(openLibraryAfterCapture, forKey: "openLibraryAfterCapture") } }
 
     /// 타이머 캡처 단축키를 눌렀을 때 기다리는 시간(초).
@@ -196,8 +199,12 @@ final class AppSettings: ObservableObject {
             ?? KeyCombo.defaults
         // 나중에 추가된 동작은 한 번만 기본 단축키를 넣어 준다. 사용자가 지운 단축키는 되살리지 않는다.
         var known = Set(defaults.stringArray(forKey: knownActionsKey) ?? Array(saved.keys))
+        // 쓰던 단축키가 모두 ⌃⌘이면 새 동작도 ⌃⌘로 맞춘다.
+        let control = UInt32(controlKey | cmdKey)
+        let usesControl = !saved.isEmpty && saved.values.allSatisfy { $0.modifiers == control }
+        let fallback = usesControl ? KeyCombo.controlCommandSet : KeyCombo.defaults
         for action in HotKeyAction.allCases where !known.contains(action.rawValue) {
-            if saved[action.rawValue] == nil, let combo = KeyCombo.defaults[action.rawValue],
+            if saved[action.rawValue] == nil, let combo = fallback[action.rawValue],
                !saved.values.contains(combo) { saved[action.rawValue] = combo }
             known.insert(action.rawValue)
         }
@@ -205,6 +212,9 @@ final class AppSettings: ObservableObject {
         let whiteboard = HotKeyAction.whiteboard.rawValue
         if saved[whiteboard] == KeyCombo.oldWhiteboardDefault { saved[whiteboard] = KeyCombo.defaults[whiteboard] }
         hotKeys = saved
+        // init 안에서는 didSet이 불리지 않아서, 새로 넣어 준 단축키를 직접 저장한다.
+        // 저장하지 않으면 다음 실행 때 "사용자가 지운 단축키"로 보여 사라진다.
+        defaults.set(try? JSONEncoder().encode(saved), forKey: hotKeysKey)
         defaults.set(Array(known), forKey: knownActionsKey)
 
         language = Localization.language
@@ -236,6 +246,7 @@ final class AppSettings: ObservableObject {
         checkUpdates = defaults.bool(forKey: "checkUpdates")
         restorePins = defaults.object(forKey: "restorePins") as? Bool ?? true
         isolateWindow = defaults.object(forKey: "isolateWindow") as? Bool ?? true
+        openCodeLinks = defaults.object(forKey: "openCodeLinks") as? Bool ?? true
         openLibraryAfterCapture = defaults.object(forKey: "openLibraryAfterCapture") as? Bool ?? true
         toolbarLayout = defaults.string(forKey: "toolbarLayout").flatMap(ToolbarLayout.init) ?? .twoRows
         toolbarAlignment = defaults.string(forKey: "toolbarAlignment").flatMap(ToolbarAlignment.init) ?? .center
@@ -348,6 +359,7 @@ private struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Toggle(L("다시 켤 때 띄워 둔 캡처 되살리기"), isOn: $settings.restorePins)
+                Toggle(L("QR 코드가 링크면 바로 브라우저로 열기"), isOn: $settings.openCodeLinks)
                 Toggle(L("새 버전이 나오면 알려 주기"), isOn: $settings.checkUpdates)
                     .onChange(of: settings.checkUpdates) { _, on in
                         if on { NSApp.sendAction(Selector(("checkForUpdateNow")), to: nil, from: nil) }

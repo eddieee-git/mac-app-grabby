@@ -41,6 +41,8 @@ enum SelfTest {
             ("KeyTests.defaultShortcutsDoNotCollide", SelfTest_KeyTests.test_defaultShortcutsDoNotCollide),
             ("KeyTests.displayText", SelfTest_KeyTests.test_displayText),
             ("KeyTests.versionComparison", SelfTest_KeyTests.test_versionComparison),
+            ("KeyTests.codeLinksOpenOnlyWebAddresses", SelfTest_KeyTests.test_codeLinksOpenOnlyWebAddresses),
+            ("KeyTests.readsQRCode", SelfTest_KeyTests.test_readsQRCode),
             ("StoreTests.pruneKeepsNewestAndKept", SelfTest_StoreTests.test_pruneKeepsNewestAndKept),
             ("StoreTests.removeAllKeepsKeptWhenAsked", SelfTest_StoreTests.test_removeAllKeepsKeptWhenAsked),
             ("StoreTests.editableKeepsOriginalAndMarks", SelfTest_StoreTests.test_editableKeepsOriginalAndMarks),
@@ -213,6 +215,37 @@ enum SelfTest_CanvasTests {
 enum SelfTest_KeyTests {
     static func expect(_ c: @autoclosure () throws -> Bool, _ m: String = "", line: Int = #line) { SelfTest.expect(try c(), m, line: line) }
     static func require<T>(_ v: T?) throws -> T { guard let v else { throw SelfTest.Missing() }; return v }
+
+    static func test_codeLinksOpenOnlyWebAddresses() {
+        expect(CodeReader.webURL("https://example.com/a?b=1") != nil)
+        expect(CodeReader.webURL("http://example.com") != nil)
+        expect(CodeReader.webURL("HTTPS://EXAMPLE.COM") != nil)
+        expect(CodeReader.webURL("file:///etc/passwd") == nil, "파일 주소는 열지 않음")
+        expect(CodeReader.webURL("javascript:alert(1)") == nil)
+        expect(CodeReader.webURL("smb://server/share") == nil)
+        expect(CodeReader.webURL("WIFI:S:home;T:WPA;P:secret;;") == nil)
+        expect(CodeReader.webURL("https://") == nil)
+        expect(CodeReader.webURL("hello world") == nil)
+    }
+
+    /// CoreImage로 만든 QR을 다시 읽어 본다.
+    static func test_readsQRCode() throws {
+        let filter = CIFilter(name: "CIQRCodeGenerator")!
+        filter.setValue(Data("https://github.com/eddieee-git/mac-app-grabby".utf8), forKey: "inputMessage")
+        let output = try require(filter.outputImage).transformed(by: CGAffineTransform(scaleX: 8, y: 8))
+        // 둘레에 여백을 둬야 잘 읽힌다.
+        let padded = output.transformed(by: CGAffineTransform(translationX: 40, y: 40))
+            .composited(over: CIImage(color: .white).cropped(to: output.extent.insetBy(dx: -40, dy: -40).offsetBy(dx: 40, dy: 40)))
+        let image = try require(CIContext().createCGImage(padded, from: padded.extent))
+        let semaphore = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var values: [String] = []
+        Task.detached {
+            values = await CodeReader.read(image)
+            semaphore.signal()
+        }
+        semaphore.wait()
+        expect(values == ["https://github.com/eddieee-git/mac-app-grabby"], "읽은 값: \(values)")
+    }
 
     static func test_versionComparison() {
         expect(UpdateChecker.isNewer("0.10.0", than: "0.9.1"))

@@ -27,6 +27,7 @@ final class LibraryWindow: NSWindow {
         switch KeyLetter.of(event) {
         case "p" where mods == .command: library.pinCurrent()
         case "t" where mods == .command: library.recognizeCurrent()
+        case "r" where mods == .command: library.readCodeCurrent()
         case "b" where mods == .command: library.beautifyCurrent()
         case "=": library.zoom { $0.zoomIn() }
         case "-": library.zoom { $0.zoomOut() }

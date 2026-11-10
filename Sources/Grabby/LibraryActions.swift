@@ -51,6 +51,13 @@ extension LibraryWindowController {
         }
     }
 
+    func readCodeCurrent() {
+        guard let image = currentImage() else { return }
+        Task { @MainActor in CodeReader.handle(await CodeReader.read(image)) }
+    }
+
+    @objc func qrAction() { readCodeCurrent() }
+
     @objc func searchChanged() {
         query = searchField.stringValue
         // 검색을 지우면 다시 캔버스로 돌아가 도구 단축키를 쓸 수 있게 한다.

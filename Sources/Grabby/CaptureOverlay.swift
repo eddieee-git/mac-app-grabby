@@ -4,6 +4,8 @@ import Carbon
 /// 캡처를 마친 뒤 할 일.
 enum CaptureAction {
     case copy, save, pin, ocr, beautify
+    /// QR 코드를 읽어 값을 복사하고, 링크면 브라우저로 연다.
+    case qr
 }
 
 /// 영역 캡처를 마친 결과. `rect`는 화면 왼쪽 위 기준 포인트 좌표다.
@@ -33,6 +35,8 @@ struct CaptureResult {
 final class CaptureSession {
     enum Mode: Equatable {
         case area, fullScreen, whiteboard
+        /// QR 읽기: 영역이나 창을 고르면 편집 없이 바로 읽는다.
+        case qr
         /// 앞에 있던 앱의 창(전역 좌표, 왼쪽 위 원점)을 고른 채 시작한다.
         case window(CGRect, String, CGWindowID)
     }
@@ -58,6 +62,9 @@ final class CaptureSession {
         active?.makeKey()
         guard let overlay = active?.overlay else { return }
         switch mode {
+        case .qr:
+            for window in windows { window.overlay.readsCode = true }
+            overlay.pointerMoved(to: overlay.convert(active!.convertPoint(fromScreen: mouse), from: nil))
         case .area:
             overlay.pointerMoved(to: overlay.convert(active!.convertPoint(fromScreen: mouse), from: nil))
         case .fullScreen:
@@ -205,6 +212,7 @@ final class OverlayWindow: NSPanel {
         case "p" where mods == .command: session?.confirm(overlay, .pin)
         case "t" where mods == .command: session?.confirm(overlay, .ocr)
         case "b" where mods == .command: session?.confirm(overlay, .beautify)
+        case "r" where mods == .command: session?.confirm(overlay, .qr)
         case "z": mods.contains(.shift) ? overlay.canvas?.redo() : overlay.canvas?.undo()
         default: return false
         }
@@ -233,6 +241,8 @@ final class OverlayView: NSView {
     private var windowRects: [CGRect] { screenWindows.map(\.rect) }
     /// 창 고르기(⌃⌘4): 돋보기 없이 창을 캡처 영역처럼 강조하고 안내를 띄운다. 드래그하면 영역 선택도 된다.
     var pickWindows = false { didSet { loupe.isHidden = true; needsDisplay = true } }
+    /// QR 읽기 모드: 영역을 고르는 즉시 읽고 끝낸다.
+    var readsCode = false { didSet { needsDisplay = true } }
     private let loupe = LoupeView()
     /// 전체 화면 캡처: 화면 전체를 조금 줄여 가운데에 보여 준다. 영역 손잡이는 쓰지 않는다.
     private var isPreview = false
@@ -331,7 +341,7 @@ final class OverlayView: NSView {
             border.stroke()
             drawSizeLabel(for: hovered.rect, name: hovered.name)
         }
-        if pickWindows, selection == nil, dragStart == nil { drawGuide() }
+        if pickWindows || readsCode, selection == nil, dragStart == nil { drawGuide() }
         if selection == nil, dragStart == nil, hovered != nil { return }
         guard let selection else { return }
         NSColor.white.withAlphaComponent(0.9).setStroke()
@@ -343,7 +353,8 @@ final class OverlayView: NSView {
 
     /// 화면 위쪽 가운데에 창 고르기 안내를 띄운다.
     private func drawGuide() {
-        let text = L("캡처할 창을 클릭하세요 · 드래그하면 영역 선택 · Esc 취소") as NSString
+        let text = (readsCode ? L("QR 코드를 드래그해서 고르세요 · F 전체 화면 · Esc 취소")
+                              : L("캡처할 창을 클릭하세요 · 드래그하면 영역 선택 · Esc 취소")) as NSString
         let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 14, weight: .medium), .foregroundColor: NSColor.white]
         let size = text.size(withAttributes: attributes)
         let box = CGRect(x: ((bounds.width - size.width) / 2 - 18).rounded(), y: 60, width: size.width + 36, height: size.height + 18)
@@ -510,6 +521,10 @@ final class OverlayView: NSView {
                 guard let self else { return }
                 self.session?.confirm(self, .beautify)
             },
+            .init(symbol: "qrcode.viewfinder", title: L("QR 읽기 (⌘R) · 값을 복사하고, 링크면 브라우저로 열기")) { [weak self] in
+                guard let self else { return }
+                self.session?.confirm(self, .qr)
+            },
             .init(symbol: "square.and.arrow.down", title: L("파일로 저장 (⌘S) · 복사하고 탭에도 추가")) { [weak self] in
                 guard let self else { return }
                 self.session?.confirm(self, .save)
@@ -531,12 +546,13 @@ final class OverlayView: NSView {
         window?.makeFirstResponder(self)
         window?.invalidateCursorRects(for: self)
         needsDisplay = true
+        if readsCode { session?.confirm(self, .qr) }
     }
 
     /// 고른 창만 따로 찍어 캔버스 이미지를 바꾼다. 위에 겹쳐 있던 다른 창이 빠진다.
     /// 창 전체가 화면 안에 보일 때만 한다(그래야 크기가 고른 영역과 맞는다). 실패하면 화면에서 잘라낸 그대로 둔다.
     private func isolate(_ window: WindowList.ScreenWindow) {
-        guard AppSettings.shared.isolateWindow, !blank, window.isWhole, window.id != 0 else { return }
+        guard AppSettings.shared.isolateWindow, !blank, !readsCode, window.isWhole, window.id != 0 else { return }
         let expected = window.rect
         Task { @MainActor [weak self] in
             guard let self, let image = try? await ScreenCapturer.captureWindow(window.id, size: expected.size, scale: self.shot.scale),
@@ -736,7 +752,7 @@ enum HelpPanel {
             ]),
             (L("마치기"), [
                 ("↩  ⌘C", L("복사하고 탭에 추가")), ("⌘S", L("파일로 저장")), ("⌘P", L("화면에 띄우기")),
-                ("⌘T", L("글자 복사")), ("⌘B", L("꾸며서 복사")),
+                ("⌘T", L("글자 복사")), ("⌘B", L("꾸며서 복사")), ("⌘R", L("QR 읽기")),
             ]),
         ]
         let stack = NSStackView()

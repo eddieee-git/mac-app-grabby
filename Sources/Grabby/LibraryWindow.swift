@@ -156,6 +156,7 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
             button("square.and.arrow.down", L("파일로 저장 (⌘S) · 고른 부분이 있으면 그 부분만"), #selector(saveAction)),
             button("pin", L("화면에 띄우기 (⌘P)"), #selector(pinAction)),
             button("text.viewfinder", L("글자 복사 (⌘T) · 이미지 속 글자를 인식해 복사"), #selector(ocrAction)),
+            button("qrcode.viewfinder", L("QR 읽기 (⌘R) · 값을 복사하고, 링크면 브라우저로 열기"), #selector(qrAction)),
             button("wand.and.stars", L("꾸며서 복사 (⌘B) · 여백·배경·그림자를 넣어 복사"), #selector(beautifyAction)),
             button("crop", L("자르기 · 부분 선택한 영역만 남겨요"), #selector(cropAction)),
             button("note.text", L("메모 달기 · 탭 이름으로 보이고 검색돼요"), #selector(noteAction)),
