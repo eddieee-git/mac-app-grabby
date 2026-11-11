@@ -6,6 +6,8 @@ enum CaptureAction {
     case copy, save, pin, ocr, beautify
     /// QR 코드를 읽어 값을 복사하고, 링크면 브라우저로 연다.
     case qr
+    /// 닫을 때: 복사하지 않고 탭에만 남긴다.
+    case keep
 }
 
 /// 영역 캡처를 마친 결과. `rect`는 화면 왼쪽 위 기준 포인트 좌표다.
@@ -112,7 +114,19 @@ final class CaptureSession {
                              isWhiteboard: isBoard, action: action))
     }
 
-    fileprivate func cancel() { finish(nil) }
+    /// 영역을 골라 둔 채 닫으면 복사하지 않고 탭에만 남긴다(설정에서 끌 수 있다).
+    /// QR 읽기와, 아무것도 그리지 않은 화이트보드는 남기지 않는다.
+    fileprivate func cancel() {
+        if AppSettings.shared.keepOnCancel,
+           let overlay = windows.first(where: { $0.overlay.canvas != nil && $0.overlay.selection != nil })?.overlay,
+           !overlay.readsCode,
+           mode != .whiteboard || overlay.canvas?.annotations.isEmpty == false {
+            _ = overlay.canvas?.clearSelections()
+            confirm(overlay, .keep)
+            return
+        }
+        finish(nil)
+    }
 
     private func finish(_ result: CaptureResult?) {
         guard !finished else { return }
@@ -508,7 +522,7 @@ final class OverlayView: NSView {
 
         canvas.tool = AppSettings.shared.captureTool
         let toolbar = EditToolbar(canvas: canvas, tools: Tool.allCases, actions: [
-            .init(symbol: "xmark", title: L("취소 (Esc)")) { [weak self] in self?.session?.cancel() },
+            .init(symbol: "xmark", title: AppSettings.shared.keepOnCancel ? L("닫기 (Esc) · 복사하지 않고 탭에만 남기기") : L("취소 (Esc)")) { [weak self] in self?.session?.cancel() },
             .init(symbol: "pin", title: L("화면에 띄우기 (⌘P) · 복사하고 탭에도 추가")) { [weak self] in
                 guard let self else { return }
                 self.session?.confirm(self, .pin)
@@ -533,7 +547,8 @@ final class OverlayView: NSView {
                 guard let self else { return }
                 self.session?.confirm(self)
             },
-        ], hint: AppSettings.shared.toolbarHint ? L("↩ 복사 · Esc 취소 · ? 단축키") : nil,
+        ], hint: AppSettings.shared.toolbarHint
+            ? (AppSettings.shared.keepOnCancel ? L("↩ 복사 · Esc 탭에만 남기기 · ? 단축키") : L("↩ 복사 · Esc 취소 · ? 단축키")) : nil,
            twoRows: AppSettings.shared.toolbarLayout == .twoRows)
         addSubview(toolbar, positioned: .below, relativeTo: loupe)
         self.toolbar = toolbar

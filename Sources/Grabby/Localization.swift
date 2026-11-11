@@ -140,6 +140,11 @@ enum Localization {
         "⌘, ⌃, ⌥ 중 하나와 함께 누르세요.": "Press together with ⌘, ⌃ or ⌥.",
         "%@에서 쓰는 단축키예요.": "Already used by %@.",
         // 새 기능
+        "닫기 (Esc) · 복사하지 않고 탭에만 남기기": "Close (Esc) · Keep in tabs without copying",
+        "↩ 복사 · Esc 탭에만 남기기 · ? 단축키": "↩ Copy · Esc keep in tabs · ? Shortcuts",
+        "탭에만 남겼어요 · 복사는 하지 않았어요": "Kept in tabs · Not copied",
+        "Esc로 닫아도 탭에 남기기": "Keep in tabs when closed with Esc",
+        "영역을 고른 뒤 Esc나 ✕로 닫으면 복사하지 않고 탭에만 넣어요.": "After selecting an area, closing with Esc or ✕ adds it to tabs without copying.",
         "QR 코드를 찾지 못했어요": "No QR code found",
         "QR 코드 %ld개를 읽어 복사했어요": "Read and copied %ld QR codes",
         "QR 링크를 열었어요 · %@": "Opened QR link · %@",

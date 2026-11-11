@@ -128,6 +128,7 @@ final class AppSettings: ObservableObject {
     /// 끄면 캡처해도 탭 창을 띄우지 않는다. 이미 열려 있으면 새 탭만 더해진다.
     /// QR 코드가 웹 주소 하나면 바로 브라우저로 연다.
     @Published var openCodeLinks: Bool { didSet { defaults.set(openCodeLinks, forKey: "openCodeLinks") } }
+    @Published var keepOnCancel: Bool { didSet { defaults.set(keepOnCancel, forKey: "keepOnCancel") } }
     @Published var openLibraryAfterCapture: Bool { didSet { defaults.set(openLibraryAfterCapture, forKey: "openLibraryAfterCapture") } }
 
     /// 타이머 캡처 단축키를 눌렀을 때 기다리는 시간(초).
@@ -248,6 +249,7 @@ final class AppSettings: ObservableObject {
         isolateWindow = defaults.object(forKey: "isolateWindow") as? Bool ?? true
         openCodeLinks = defaults.object(forKey: "openCodeLinks") as? Bool ?? true
         openLibraryAfterCapture = defaults.object(forKey: "openLibraryAfterCapture") as? Bool ?? true
+        keepOnCancel = defaults.object(forKey: "keepOnCancel") as? Bool ?? true
         toolbarLayout = defaults.string(forKey: "toolbarLayout").flatMap(ToolbarLayout.init) ?? .twoRows
         toolbarAlignment = defaults.string(forKey: "toolbarAlignment").flatMap(ToolbarAlignment.init) ?? .center
         toolbarHint = defaults.object(forKey: "toolbarHint") as? Bool ?? true
@@ -354,6 +356,10 @@ private struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Toggle(L("캡처할 때 소리"), isOn: $settings.captureSound)
+                Toggle(L("Esc로 닫아도 탭에 남기기"), isOn: $settings.keepOnCancel)
+                Text(L("영역을 고른 뒤 Esc나 ✕로 닫으면 복사하지 않고 탭에만 넣어요."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Toggle(L("캡처하면 탭 창 띄우기"), isOn: $settings.openLibraryAfterCapture)
                 Text(L("끄면 복사만 하고, 탭 창은 메뉴바에서 열 때만 보여요. 이미 열려 있으면 새 탭이 더해져요."))
                     .font(.caption)

@@ -354,16 +354,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// 복사하고 탭에 넣는다. 찍은 자리를 반짝이고 소리를 낸다.
-    private func save(_ result: CaptureResult) {
+    private func save(_ result: CaptureResult, copy: Bool = true) {
         let (item, pruned) = CaptureStore.shared.add(result.image, scale: result.pixelScale,
                                                      original: result.original, annotations: result.annotations)
-        Clipboard.copy(result.image, scale: result.pixelScale)
+        if copy { Clipboard.copy(result.image, scale: result.pixelScale) }
         if !result.isWhiteboard {
             UserDefaults.standard.set(NSStringFromRect(result.rect), forKey: lastRectKey)
             UserDefaults.standard.set(Int(result.displayID), forKey: lastDisplayKey)
         }
         CaptureFeedback.flash(result.globalRect)
-        let message = pruned > 0 ? L("복사했어요 · 오래된 캡처 %ld개를 정리했어요", pruned) : L("복사했어요 · ⌘V로 붙여 넣기")
+        let message = !copy ? L("탭에만 남겼어요 · 복사는 하지 않았어요")
+            : pruned > 0 ? L("복사했어요 · 오래된 캡처 %ld개를 정리했어요", pruned) : L("복사했어요 · ⌘V로 붙여 넣기")
         Toast.show(message, image: CaptureStore.shared.thumbnail(for: item))
         if settings.openLibraryAfterCapture {
             if library == nil { library = LibraryWindowController() }
@@ -405,6 +406,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             returnToPreviousApp()
         case .copy:
             save(result)
+            returnToPreviousApp()
+        case .keep:
+            save(result, copy: false)
             returnToPreviousApp()
         case .beautify:
             // 탭에는 원래 캡처를 넣고, 클립보드에는 꾸민 이미지를 넣는다.
