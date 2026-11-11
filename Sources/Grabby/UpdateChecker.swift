@@ -8,28 +8,52 @@ enum UpdateChecker {
     static let releasesPage = URL(string: "https://github.com/eddieee-git/mac-app-grabby/releases/latest")!
     private static let lastCheckKey = "lastUpdateCheck"
 
-    /// 새 버전이 있으면 그 버전 문자열을 돌려준다. 하루에 한 번만 묻는다(force면 바로).
-    static func check(force: Bool = false, completion: @escaping @MainActor (String?) -> Void) {
+    /// 새 릴리스: 버전과, 있으면 내려받을 dmg 주소와 GitHub가 알려 준 SHA-256.
+    struct Release: Equatable {
+        let version: String
+        let dmg: URL?
+        let sha256: String?
+    }
+
+    /// 확인할 주소. 디버그 빌드에서는 `-updateFeed <주소>`로 바꿔 점검할 수 있다.
+    private static var feedURL: URL {
+        #if DEBUG
+        if let custom = UserDefaults.standard.string(forKey: "updateFeed"), let url = URL(string: custom) { return url }
+        #endif
+        return latestURL
+    }
+
+    /// 새 버전이 있으면 그 릴리스를 돌려준다. 하루에 한 번만 묻는다(force면 바로).
+    static func check(force: Bool = false, completion: @escaping @MainActor (Release?) -> Void) {
         let defaults = UserDefaults.standard
         if !force, let last = defaults.object(forKey: lastCheckKey) as? Date, Date().timeIntervalSince(last) < 86_400 {
             completion(nil)
             return
         }
         defaults.set(Date(), forKey: lastCheckKey)
-        var request = URLRequest(url: latestURL, timeoutInterval: 10)
+        var request = URLRequest(url: feedURL, timeoutInterval: 10)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("Grabby", forHTTPHeaderField: "User-Agent")
         let current = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
         URLSession.shared.dataTask(with: request) { data, response, _ in
-            var newer: String?
-            if (response as? HTTPURLResponse)?.statusCode == 200, let data,
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let tag = json["tag_name"] as? String {
-                let version = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
-                if isNewer(version, than: current) { newer = version }
-            }
+            var newer: Release?
+            let ok = (response as? HTTPURLResponse).map { $0.statusCode == 200 } ?? (data != nil)
+            if ok, let data, let release = parse(data), isNewer(release.version, than: current) { newer = release }
             DispatchQueue.main.async { MainActor.assumeIsolated { completion(newer) } }
         }.resume()
+    }
+
+    /// GitHub 릴리스 응답에서 버전과 첫 dmg 첨부 파일을 읽는다.
+    nonisolated static func parse(_ data: Data) -> Release? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let tag = json["tag_name"] as? String else { return nil }
+        let version = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+        let assets = json["assets"] as? [[String: Any]] ?? []
+        let dmg = assets.first { ($0["name"] as? String)?.lowercased().hasSuffix(".dmg") == true }
+        let url = (dmg?["browser_download_url"] as? String).flatMap(URL.init(string:))
+        var sha: String?
+        if let digest = dmg?["digest"] as? String, digest.hasPrefix("sha256:") { sha = String(digest.dropFirst(7)).lowercased() }
+        return Release(version: version, dmg: url, sha256: sha)
     }
 
     /// "0.10.0"이 "0.9.1"보다 새 것이라고 판단하도록 숫자 단위로 비교한다.

@@ -44,7 +44,7 @@ The app's interface is available in Korean and English (Settings → General →
 4. The Getting Started window appears on first launch. Turn on **Screen Recording** permission, then click **Restart After Turning On**.
    If you'd rather keep the macOS screenshot shortcuts, click **Use ⌃⌘ Keys** in Getting Started.
 
-**Updating**: Replace Grabby in Applications with the one from the new dmg. If Grabby asks for Screen Recording permission again, turn Grabby off and on in the Screen & System Audio Recording list, then restart it. Because Grabby has no developer signature, macOS sometimes treats a new version as a different app.
+**Updating**: From 0.4.0, if update checks are on in Settings, **Install Version…** appears at the top of the menu bar menu when a new version is out. Click it and Grabby downloads and verifies the new version, replaces itself and restarts (no "Not Opened" warning this way). On older versions, or to do it by hand, replace Grabby in Applications with the one from the new dmg. If Grabby asks for Screen Recording permission again, turn Grabby off and on in the Screen & System Audio Recording list, then restart it. Because Grabby has no developer signature, macOS sometimes treats a new version as a different app.
 
 > Requires an Apple silicon Mac with macOS 14 (Sonoma) or later.
 

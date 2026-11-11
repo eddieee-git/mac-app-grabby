@@ -41,6 +41,7 @@ enum SelfTest {
             ("KeyTests.defaultShortcutsDoNotCollide", SelfTest_KeyTests.test_defaultShortcutsDoNotCollide),
             ("KeyTests.displayText", SelfTest_KeyTests.test_displayText),
             ("KeyTests.versionComparison", SelfTest_KeyTests.test_versionComparison),
+            ("KeyTests.parsesReleaseAndChecksum", SelfTest_KeyTests.test_parsesReleaseAndChecksum),
             ("KeyTests.codeLinksOpenOnlyWebAddresses", SelfTest_KeyTests.test_codeLinksOpenOnlyWebAddresses),
             ("KeyTests.readsQRCode", SelfTest_KeyTests.test_readsQRCode),
             ("StoreTests.pruneKeepsNewestAndKept", SelfTest_StoreTests.test_pruneKeepsNewestAndKept),
@@ -252,6 +253,24 @@ enum SelfTest_KeyTests {
         expect(UpdateChecker.isNewer("0.3", than: "0.2.9"))
         expect(!UpdateChecker.isNewer("0.2.0", than: "0.2"))
         expect(!UpdateChecker.isNewer("0.1.9", than: "0.2.0"))
+    }
+
+    static func test_parsesReleaseAndChecksum() throws {
+        let json = """
+        {"tag_name":"v0.4.0","assets":[{"name":"notes.txt","browser_download_url":"https://example.com/notes.txt"},
+        {"name":"Grabby-0.4.0.dmg","browser_download_url":"https://example.com/Grabby-0.4.0.dmg","digest":"sha256:ABC123"}]}
+        """
+        let release = UpdateChecker.parse(Data(json.utf8))
+        expect(release?.version == "0.4.0")
+        expect(release?.dmg?.lastPathComponent == "Grabby-0.4.0.dmg")
+        expect(release?.sha256 == "abc123")
+        expect(UpdateChecker.parse(Data(#"{"tag_name":"v1.0"}"#.utf8))?.dmg == nil)
+
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("grabby-sha-test")
+        try Data("abc".utf8).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        expect(try Updater.sha256(of: file) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+        expect(!Updater.canReplace(URL(fileURLWithPath: "/Volumes/Grabby/Grabby.app")))
     }
 
     private static func key(_ chars: String, code: Int, flags: NSEvent.ModifierFlags = []) -> NSEvent {
