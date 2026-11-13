@@ -124,6 +124,7 @@ final class AppSettings: ObservableObject {
     /// 다시 켤 때 띄워 둔 캡처(핀)를 되살린다.
     @Published var restorePins: Bool { didSet { defaults.set(restorePins, forKey: "restorePins") } }
     /// 창을 골라 캡처할 때 겹친 다른 창 없이 그 창만 찍는다.
+    @Published var fullScreenInstant: Bool { didSet { defaults.set(fullScreenInstant, forKey: "fullScreenInstant") } }
     @Published var isolateWindow: Bool { didSet { defaults.set(isolateWindow, forKey: "isolateWindow") } }
     /// 끄면 캡처해도 탭 창을 띄우지 않는다. 이미 열려 있으면 새 탭만 더해진다.
     /// QR 코드가 웹 주소 하나면 바로 브라우저로 연다.
@@ -247,6 +248,7 @@ final class AppSettings: ObservableObject {
         checkUpdates = defaults.bool(forKey: "checkUpdates")
         restorePins = defaults.object(forKey: "restorePins") as? Bool ?? true
         isolateWindow = defaults.object(forKey: "isolateWindow") as? Bool ?? true
+        fullScreenInstant = defaults.object(forKey: "fullScreenInstant") as? Bool ?? true
         openCodeLinks = defaults.object(forKey: "openCodeLinks") as? Bool ?? true
         openLibraryAfterCapture = defaults.object(forKey: "openLibraryAfterCapture") as? Bool ?? true
         keepOnCancel = defaults.object(forKey: "keepOnCancel") as? Bool ?? true
@@ -409,6 +411,7 @@ private struct SettingsView: View {
                 .id("segment7-\(settings.language.rawValue)")
                 Toggle(L("도구 막대 아래 안내 문구 보이기"), isOn: $settings.toolbarHint)
                 Toggle(L("창을 고르면 뒤에 겹친 창 없이 그 창만 캡처"), isOn: $settings.isolateWindow)
+                Toggle(L("전체 화면 캡처는 편집 없이 바로 복사"), isOn: $settings.fullScreenInstant)
                 Picker(L("캡처할 때 시작 도구"), selection: $settings.captureTool) {
                     ForEach(Tool.allCases, id: \.self) { Text($0.name).tag($0) }
                 }

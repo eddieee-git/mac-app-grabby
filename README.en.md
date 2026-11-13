@@ -68,7 +68,7 @@ Press **?** while capturing to see every shortcut.
 |---|---|
 | ⇧⌘1 | Capture area |
 | ⇧⌘2 | Capture the last area again (copied without editing) |
-| ⇧⌘3 | Capture full screen |
+| ⇧⌘3 | Capture full screen: copies the screen under the mouse right away and adds it to tabs, without editing (switch back to the editor in Settings) |
 | ⇧⌘4 | Pick a window: the window under the mouse is highlighted (at first, the app you were using); click to capture just that window, without windows behind it |
 | ⇧⌘5 | Timer capture (area capture after the set delay, 3 s by default) |
 | ⇧⌘` (shown as ⇧⌘₩) | Whiteboard |
@@ -132,7 +132,7 @@ Menu bar → Settings…
 | Tab | Items |
 |---|---|
 | General | Language (한국어/English), theme, launch at login, confirm before deleting tabs, captures to keep, capture sound, keep in tabs when closed with Esc, show the tab window after capturing, timer delay, bring back pinned captures, open QR links right away, new version alerts and install from the menu (off by default) |
-| Editing | Palette (add, remove, drag to reorder) and default color, default width, remember last style, capture toolbar (two rows/one row, center/right, hint), capture only the picked window, starting tools, beautify background and padding, whiteboard background |
+| Editing | Palette (add, remove, drag to reorder) and default color, default width, remember last style, capture toolbar (two rows/one row, center/right, hint), capture only the picked window, copy full-screen captures right away, starting tools, beautify background and padding, whiteboard background |
 | Saving | Default save folder, format (PNG/JPEG), save without a dialog, text recognition for search, clear recognized text |
 | Shortcuts | Change global shortcuts, switch to ⌃⌘ keys at once; warnings for other capture apps and macOS screenshot shortcuts |
 | About | Version, open capture folder, Getting Started, Restart |

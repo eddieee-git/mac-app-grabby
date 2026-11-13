@@ -366,7 +366,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         tick()
     }
-    @objc private func captureFullScreen() { startSession(.fullScreen) }
+    /// 전체 화면 캡처: 기본은 편집 화면 없이 마우스가 있는 화면을 바로 복사하고 탭에 넣는다.
+    /// 설정에서 끄면 예전처럼 편집 화면으로 연다.
+    @objc private func captureFullScreen() {
+        guard settings.fullScreenInstant else { startSession(.fullScreen); return }
+        guard session == nil else { return }
+        guard ScreenCapturer.hasPermission else { ScreenCapturer.requestPermission(); return }
+        let mouse = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
+        guard let number = screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
+            startSession(.fullScreen)
+            return
+        }
+        let displayID = CGDirectDisplayID(number.uint32Value)
+        Task { @MainActor in
+            do {
+                guard let shot = try await ScreenCapturer.capture(displayID: displayID) else {
+                    startSession(.fullScreen)
+                    return
+                }
+                save(CaptureResult(image: shot.image, pixelScale: shot.scale,
+                                   rect: CGRect(origin: .zero, size: shot.screen.frame.size),
+                                   displayID: displayID, screenFrame: shot.screen.frame))
+            } catch {
+                show(error)
+            }
+        }
+    }
 
     /// 지금 앞에 있는 앱의 맨 앞 창을 고른 채 편집 화면을 연다. 창을 못 찾으면 영역 캡처로 시작한다.
     @objc private func captureFrontWindow() {

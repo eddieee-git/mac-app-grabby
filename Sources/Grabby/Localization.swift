@@ -140,6 +140,7 @@ enum Localization {
         "⌘, ⌃, ⌥ 중 하나와 함께 누르세요.": "Press together with ⌘, ⌃ or ⌥.",
         "%@에서 쓰는 단축키예요.": "Already used by %@.",
         // 새 기능
+        "전체 화면 캡처는 편집 없이 바로 복사": "Copy full-screen captures right away, without editing",
         "Grabby %@로 업데이트했어요": "Updated to Grabby %@",
         "이 릴리스에는 자동으로 설치할 파일이 없어요.": "This release has no file to install automatically.",
         "내려받지 못했어요 (HTTP %ld)": "Download failed (HTTP %ld)",
