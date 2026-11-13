@@ -33,6 +33,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.updateHotKeyItems(combos)
         }
         _ = CaptureStore.shared
+        // 날수로 정리하는 설정은 앱을 켜 둔 채로도 지나야 하므로 시작할 때와 한 시간마다 확인한다.
+        CaptureStore.shared.tidy()
+        Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { _ in
+            MainActor.assumeIsolated { _ = CaptureStore.shared.tidy() }
+        }
         if settings.restorePins { PinWindow.restore() } else { PinWindow.discardSaved() }
         ScreenCapturer.warmUp()
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { _ in
@@ -149,7 +154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 메뉴의 "새 버전 설치": 물어보고 내려받아 바꿔 넣는다. 그 자리에서 바꿀 수 없으면 릴리스 페이지를 연다.
     @objc private func installUpdate() {
         guard let release = availableUpdate else { return }
-        guard release.dmg != nil, release.sha256 != nil, Updater.canReplace(Bundle.main.bundleURL) else {
+        guard release.dmg != nil, release.signature != nil, Updater.canReplace(Bundle.main.bundleURL) else {
             openReleasePage()
             return
         }

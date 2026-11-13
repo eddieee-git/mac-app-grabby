@@ -100,9 +100,33 @@ final class CaptureStore {
         write(image, to: url(for: item))
         writeEditable(item, original: original, annotations: annotations)
         items.insert(item, at: 0)
-        let pruned = prune()
+        let pruned = prune() + pruneOld(days: AppSettings.shared.keepDays)
         save()
         return (item, pruned)
+    }
+
+    /// 설정이 바뀌었을 때와 주기적으로: 개수·날수 기준으로 정리하고 저장한다. 지운 개수.
+    @discardableResult
+    func tidy(now: Date = Date()) -> Int {
+        let removed = prune() + pruneOld(days: AppSettings.shared.keepDays, now: now)
+        if removed > 0 { save() }
+        return removed
+    }
+
+    /// 화면에 찍힌 민감한 내용이 오래 남지 않도록, 정한 날수보다 오래된 캡처를 지운다.
+    /// 고정(★)한 캡처는 남긴다. 0이면 끈 것. 저장은 부른 쪽에서 한다.
+    @discardableResult
+    func pruneOld(days: Int, now: Date = Date()) -> Int {
+        guard days > 0 else { return 0 }
+        let cutoff = now.addingTimeInterval(-Double(days) * 86_400)
+        var removed = 0
+        items = items.filter { item in
+            if item.isKept || item.date >= cutoff { return true }
+            delete(item, reason: "\(days)일 지나 정리")
+            removed += 1
+            return false
+        }
+        return removed
     }
 
     /// 보관 개수를 넘는 오래된 캡처를 지운다(고정한 캡처는 빼고 센다). 0이면 무제한.

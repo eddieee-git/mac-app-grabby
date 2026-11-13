@@ -44,7 +44,7 @@ The app's interface is available in Korean and English (Settings → General →
 4. The Getting Started window appears on first launch. Turn on **Screen Recording** permission, then click **Restart After Turning On**.
    If you'd rather keep the macOS screenshot shortcuts, click **Use ⌃⌘ Keys** in Getting Started.
 
-**Updating**: From 0.3.1, if update checks are on in Settings, **Install Version…** appears at the top of the menu bar menu when a new version is out. Click it and Grabby downloads and verifies the new version, replaces itself and restarts (no "Not Opened" warning this way). On older versions, or to do it by hand, replace Grabby in Applications with the one from the new dmg. If Grabby asks for Screen Recording permission again, turn Grabby off and on in the Screen & System Audio Recording list, then restart it. Because Grabby has no developer signature, macOS sometimes treats a new version as a different app.
+**Updating**: From 0.3.1, if update checks are on in Settings, **Install Version…** appears at the top of the menu bar menu when a new version is out. Click it and Grabby downloads and verifies the new version, replaces itself and restarts (no "Not Opened" warning this way). From 0.3.2, Grabby also checks the developer's own signature on the file and won't install it if the signature doesn't match. If Screen Recording permission was reset by the update, Grabby tells you right away. On older versions, or to do it by hand, replace Grabby in Applications with the one from the new dmg. If Grabby asks for Screen Recording permission again, turn Grabby off and on in the Screen & System Audio Recording list, then restart it. Because Grabby has no developer signature, macOS sometimes treats a new version as a different app.
 
 > Requires an Apple silicon Mac with macOS 14 (Sonoma) or later.
 
@@ -131,7 +131,7 @@ Menu bar → Settings…
 
 | Tab | Items |
 |---|---|
-| General | Language (한국어/English), theme, launch at login, confirm before deleting tabs, captures to keep, capture sound, keep in tabs when closed with Esc, show the tab window after capturing, timer delay, bring back pinned captures, open QR links right away, new version alerts and install from the menu (off by default) |
+| General | Language (한국어/English), theme, launch at login, confirm before deleting tabs, captures to keep, delete old captures (1/7/30/90 days), capture sound, keep in tabs when closed with Esc, show the tab window after capturing, timer delay, bring back pinned captures, open QR links right away, new version alerts and install from the menu (off by default) |
 | Editing | Palette (add, remove, drag to reorder) and default color, default width, remember last style, capture toolbar (two rows/one row, center/right, hint), capture only the picked window, copy full-screen captures right away, starting tools, beautify background and padding, whiteboard background |
 | Saving | Default save folder, format (PNG/JPEG), save without a dialog, text recognition for search, clear recognized text |
 | Shortcuts | Change global shortcuts, switch to ⌃⌘ keys at once; warnings for other capture apps and macOS screenshot shortcuts |
@@ -146,7 +146,7 @@ If another capture app uses the same shortcut, whichever registered first gets t
 Turn Grabby on in System Settings → Privacy & Security → Screen & System Audio Recording, then click **Restart After Turning On** in Getting Started (or Settings → About → Restart). If you just updated and Grabby is already on in the list, turn it off and on, then restart.
 
 **Where are captures stored?**
-Captures in the tab window live in `~/Library/Application Support/Grabby/Captures` (Settings → About → Open Capture Folder). To save files elsewhere, use ⌘S or **Save All** in the tab window. When you exceed the number to keep, the oldest are removed first, but ★ kept captures are never removed.
+Captures in the tab window live in `~/Library/Application Support/Grabby/Captures` (Settings → About → Open Capture Folder). To save files elsewhere, use ⌘S or **Save All** in the tab window. When you exceed the number to keep, the oldest are removed first, but ★ kept captures are never removed. To keep sensitive screens such as passwords from lingering, turn on **Delete old captures** in Settings → General to remove captures after a number of days (off by default). Captures are stored unencrypted, only on this Mac.
 
 **Does Grabby send anything over the internet?**
 Not by default. Capture, text recognition (OCR), and QR reading happen entirely on your Mac, and no account is needed. Only if you turn on **Tell me about new versions** in Settings → General does Grabby ask GitHub for the latest version number, once a day. It downloads a new dmg from GitHub only when you click **Install Version…** in the menu.
@@ -167,6 +167,7 @@ Builds with Command Line Tools only, no Xcode.
 ./scripts/release.sh        # test → build → tag → GitHub release with the dmg
 ```
 
+- Release dmgs come with an Ed25519 signature (`.sig`) that in-app updates check. The signing key lives outside the repo at `~/.config/grabby/update-signing.key`; create it once with `swift scripts/sign-update.swift keygen` (no Apple account needed).
 - If Screen Recording permission resets after every rebuild, create a local signing certificate once (no Apple account needed): `./scripts/make-signing-cert.sh`
 - The icon is drawn by `scripts/make-icon.swift`.
 - The testing arguments `-showInDock YES` (show in Dock), `-captureFolder <path>` (use another capture folder), `-updateFeed <url>` (check another update address) and `-autoInstallUpdate YES` (install a new version without asking) work only in debug builds: `GRABBY_DEBUG=1 ./scripts/build-app.sh`

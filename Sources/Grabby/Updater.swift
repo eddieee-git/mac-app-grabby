@@ -2,12 +2,16 @@ import AppKit
 import CryptoKit
 
 /// 메뉴에서 고르면 새 릴리스의 dmg를 내려받아 지금 앱 자리에 바꿔 넣고 다시 시작한다.
-/// GitHub가 알려 준 SHA-256, 번들 ID와 버전, 코드 서명을 모두 확인한 뒤에만 바꾼다.
+/// 릴리스에 함께 올린 `.sig`(Ed25519 서명)를 앱에 넣은 공개 키로 확인한다. 비밀 키는 개발자만 갖고 있어서,
+/// GitHub 계정이나 다운로드 경로가 털려도 다른 파일은 설치하지 않는다. Apple 인증서와는 상관없다(`scripts/sign-update.swift`).
+/// 그 밖에 GitHub가 알려 준 SHA-256(있으면), 번들 ID와 버전, 코드 서명도 확인한다.
 /// 앱이 직접 내려받은 파일에는 격리 표시가 붙지 않아서, 새 버전을 열 때 Gatekeeper 경고가 뜨지 않는다.
 @MainActor
 enum Updater {
     private(set) static var isInstalling = false
     static let updatedFromKey = "updatedFromVersion"
+    /// `~/.config/grabby/update-signing.key`의 공개 키.
+    nonisolated static let publicKey = "vT6+HF0GsqE4tcyOzKYfBj5Mt1+LOchWa7Josi8Jb44="
 
     struct Failure: LocalizedError {
         let message: String
@@ -45,13 +49,17 @@ enum Updater {
         let current = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
         guard from != current else { return }
         Toast.show(L("Grabby %@로 업데이트했어요", current))
+        // 서명이 바뀐 새 버전을 macOS가 다른 앱으로 보면 화면 기록 권한이 풀린다. 캡처하다 알게 되지 않도록 바로 안내한다.
+        if !ScreenCapturer.hasPermission {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { ScreenCapturer.requestPermission() }
+        }
     }
 
     // MARK: - 내려받기와 확인
 
     nonisolated private static func prepare(_ release: UpdateChecker.Release, replacing app: URL,
                                             identifier: String) async throws -> (app: URL, work: URL) {
-        guard let dmg = release.dmg, let expected = release.sha256 else {
+        guard let dmg = release.dmg, let signatureURL = release.signature else {
             throw Failure(message: L("이 릴리스에는 자동으로 설치할 파일이 없어요."))
         }
         let (downloaded, response) = try await URLSession.shared.download(from: dmg)
@@ -59,7 +67,15 @@ enum Updater {
         if let http = response as? HTTPURLResponse, http.statusCode != 200 {
             throw Failure(message: L("내려받지 못했어요 (HTTP %ld)", http.statusCode))
         }
-        guard try sha256(of: downloaded) == expected else {
+        let (signature, sigResponse) = try await URLSession.shared.data(from: signatureURL)
+        if let http = sigResponse as? HTTPURLResponse, http.statusCode != 200 {
+            throw Failure(message: L("내려받지 못했어요 (HTTP %ld)", http.statusCode))
+        }
+        let data = try Data(contentsOf: downloaded, options: .mappedIfSafe)
+        guard isSigned(data, signature: signature) else {
+            throw Failure(message: L("업데이트 서명이 맞지 않아요. 설치하지 않았어요."))
+        }
+        if let expected = release.sha256, try sha256(of: downloaded) != expected {
             throw Failure(message: L("내려받은 파일이 릴리스와 달라요. 설치하지 않았어요."))
         }
 
@@ -88,6 +104,15 @@ enum Updater {
         try? run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", staged.path], failure: "")
         success = true
         return (staged, work)
+    }
+
+    /// `.sig` 내용(base64)이 이 데이터에 대한 우리 키의 서명인지.
+    nonisolated static func isSigned(_ data: Data, signature: Data, publicKey: String = publicKey) -> Bool {
+        guard let keyData = Data(base64Encoded: publicKey),
+              let key = try? Curve25519.Signing.PublicKey(rawRepresentation: keyData),
+              let raw = Data(base64Encoded: String(decoding: signature, as: UTF8.self)
+                .trimmingCharacters(in: .whitespacesAndNewlines)) else { return false }
+        return key.isValidSignature(raw, for: data)
     }
 
     nonisolated static func sha256(of file: URL) throws -> String {

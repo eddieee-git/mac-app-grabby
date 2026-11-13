@@ -109,6 +109,22 @@ private struct WelcomeView: View {
                 .padding(4)
             }
 
+            // 업데이트 확인은 기본으로 꺼 두되, 처음에 한 번 고를 수 있게 한다. 꺼 두면 메뉴에서 업데이트를 받을 수 없다.
+            GroupBox {
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle(L("새 버전이 나오면 알려 주기"), isOn: $settings.checkUpdates)
+                        .bold()
+                        .onChange(of: settings.checkUpdates) { _, on in
+                            if on { NSApp.sendAction(Selector(("checkForUpdateNow")), to: nil, from: nil) }
+                        }
+                    Text(L("켜면 하루 한 번 GitHub에 최신 버전 번호만 물어보고, 새 버전이 나오면 메뉴에서 바로 설치할 수 있어요."))
+                        .foregroundStyle(.secondary)
+                }
+                .font(.callout)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(4)
+            }
+
             HStack {
                 Button(L("설정 열기")) {
                     NSApp.sendAction(Selector(("openSettings")), to: nil, from: nil)

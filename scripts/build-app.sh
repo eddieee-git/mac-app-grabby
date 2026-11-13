@@ -18,12 +18,13 @@ cp Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 
 # scripts/make-signing-cert.sh로 만든 인증서가 있으면 그것으로 서명한다. 다시 빌드해도 화면 기록 권한이 유지된다.
 # 없으면 임시 서명을 하되, 서명 조건을 번들 ID로 지정해서 같은 앱으로 인식되게 한다.
+# 강화 런타임(--options runtime)을 켜서 다른 라이브러리를 끼워 넣지 못하게 한다.
 identity="Grabby Local Signing"
 if security find-identity -p codesigning 2>/dev/null | grep -q "$identity" \
    || security find-certificate -c "$identity" >/dev/null 2>&1; then
-    codesign --force --sign "$identity" "$app"
+    codesign --force --sign "$identity" --options runtime "$app"
 else
-    codesign --force --sign - -r='designated => identifier "com.eddieee.Grabby"' "$app"
+    codesign --force --sign - --options runtime -r='designated => identifier "com.eddieee.Grabby"' "$app"
 fi
 
 if [[ $config == debug ]]; then
@@ -36,12 +37,20 @@ fi
 version=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Resources/Info.plist)
 dmg="build/Grabby-$version.dmg"
 staging=build/dmg
-rm -rf "$staging" "$dmg" build/Grabby.dmg
+rm -rf "$staging" "$dmg" "$dmg.sig" build/Grabby.dmg
 mkdir -p "$staging"
 cp -R "$app" "$staging/"
 ln -s /Applications "$staging/Applications"
 hdiutil create -quiet -volname Grabby -srcfolder "$staging" -format UDZO "$dmg"
 rm -rf "$staging"
 
+# 앱 안 업데이트가 확인하는 Ed25519 서명. 릴리스에 dmg와 함께 .sig를 올린다.
+# 키가 없으면 .sig를 만들지 않고, 그 릴리스는 앱 안에서 자동 설치되지 않는다.
+if [[ -f "${GRABBY_UPDATE_KEY:-$HOME/.config/grabby/update-signing.key}" ]]; then
+    swift scripts/sign-update.swift sign "$dmg" >/dev/null
+fi
+
 echo "$app"
 echo "$dmg"
+[[ -f "$dmg.sig" ]] && echo "$dmg.sig"
+exit 0

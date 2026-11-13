@@ -19,6 +19,7 @@ Apple 실리콘, macOS 14 이상. 저장소: `eddieee-git/mac-app-grabby` (공�
 GRABBY_DEBUG=1 ./scripts/build-app.sh   # 디버그 빌드, dmg 없음. 점검용 실행 인자가 동작함
 ./scripts/release.sh                    # 점검 → 빌드 → 태그 push → gh release create (dmg 첨부)
 ./scripts/make-signing-cert.sh          # (선택) 이 Mac 전용 서명 인증서. 다시 빌드해도 화면 기록 권한 유지
+swift scripts/sign-update.swift public  # 업데이트 서명 키의 공개 키 출력 (keygen | public | sign 파일)
 ```
 
 디버그 빌드 전용 실행 인자:
@@ -35,7 +36,13 @@ GRABBY_DEBUG=1 ./scripts/build-app.sh   # 디버그 빌드, dmg 없음. 점검�
 4. 커밋하고 `main`을 push한 뒤 `./scripts/release.sh`.
 5. 확인: `gh api repos/eddieee-git/mac-app-grabby/releases/latest --jq '.tag_name, .assets[].digest'`의 digest가 `shasum -a 256 build/Grabby-<버전>.dmg`와 같은지.
 
-앱 안의 업데이트는 GitHub 최신 릴리스의 첫 `.dmg` 첨부와 그 `digest`(SHA-256)를 쓴다. 릴리스에는 dmg를 하나만 올리고, dmg 안 앱 이름은 `Grabby.app`, 버전은 태그와 같아야 한다.
+앱 안의 업데이트는 GitHub 최신 릴리스의 첫 `.dmg` 첨부와, 같은 이름에 `.sig`를 붙인 Ed25519 서명 파일을 쓴다. 릴리스에는 dmg 하나와 그 `.sig`를 올리고, dmg 안 앱 이름은 `Grabby.app`, 버전은 태그와 같아야 한다.
+
+**업데이트 서명 키**
+- 비밀 키는 저장소 밖 `~/.config/grabby/update-signing.key`(`GRABBY_UPDATE_KEY`로 바꿀 수 있음)에 있다. 공개 키는 `Updater.publicKey`에 들어 있다.
+- `build-app.sh`가 키가 있으면 `build/Grabby-<버전>.dmg.sig`를 만들고, `release.sh`는 `.sig`가 없으면 멈춘다.
+- **키를 잃어버리면 이미 설치된 앱은 새 버전을 자동으로 받지 못한다.** 따로 백업해 둔다. 키를 바꾸면 그 전 버전 사용자는 dmg로 한 번 직접 업데이트해야 한다.
+- 0.3.1은 서명 대신 GitHub의 SHA-256만 확인하는 버전이라, 0.3.1 → 다음 버전도 메뉴에서 받을 수 있다.
 
 ## 구조 (Sources/Grabby)
 
@@ -52,7 +59,7 @@ GRABBY_DEBUG=1 ./scripts/build-app.sh   # 디버그 빌드, dmg 없음. 점검�
 | `CodeReader.swift` | QR·바코드 읽기(Vision). 웹 주소(http/https)만 브라우저로 엶 |
 | `HotKey.swift` | Carbon 전역 단축키, `HotKeyAction`, 기본값(⇧⌘)과 ⌃⌘ 묶음 |
 | `SettingsWindow.swift` | `AppSettings`(UserDefaults)와 설정 창(SwiftUI) |
-| `UpdateChecker.swift` / `Updater.swift` | 최신 릴리스 확인 / 내려받아 확인(SHA-256·번들 ID·버전·서명) 후 바꿔 넣고 다시 시작 |
+| `UpdateChecker.swift` / `Updater.swift` | 최신 릴리스 확인 / 내려받아 확인(Ed25519 `.sig`·SHA-256·번들 ID·버전·코드 서명) 후 바꿔 넣고 다시 시작. 업데이트 뒤 화면 기록 권한이 풀렸으면 안내 |
 | `Localization.swift` | `L()`과 영어 사전 |
 | `Toast.swift`, `Countdown.swift`, `Feedback.swift`, `WelcomeWindow.swift` | 알림, 타이머 숫자, 캡처 반짝임·소리, 시작 안내 |
 | `SelfTest.swift` | 자체 점검 묶음 |
@@ -68,5 +75,6 @@ GRABBY_DEBUG=1 ./scripts/build-app.sh   # 디버그 빌드, dmg 없음. 점검�
 - **단축키 추가**: `HotKeyAction`에 더하고 기본값을 정한다. 이미 쓰던 사용자의 단축키가 모두 ⌃⌘면 새 동작도 ⌃⌘로 맞추는 이전 처리가 `AppSettings.init`에 있다.
 - **캡처 화면**은 포커스를 빼앗지 않는 `NSPanel`이다. 끝나면 `returnToPreviousApp()`으로 원래 앱에 돌려준다.
 - **점검(self-test)** 은 `EventLog`를 끄고 임시 보관함을 쓴다. 새 기능에는 `SelfTest.swift`에 묶음을 더하고 목록에 등록한다.
-- **업데이트 점검**: 가짜 릴리스로 끝까지 시험할 수 있다. 버전을 올린 릴리스 dmg를 만들고, 버전을 낮춘 디버그 앱을 임시 폴더에 복사한 뒤, `{"tag_name":"v…","assets":[{"name":"Grabby-….dmg","browser_download_url":"file://…","digest":"sha256:…"}]}` 피드로 `-updateFeed file://… -autoInstallUpdate YES -checkUpdates YES -lastUpdateCheck '<date>2000-01-01T00:00:00Z</date>'`를 주고 실행한다. 점검용 앱은 실제 앱과 같은 UserDefaults를 쓰므로, 끝나면 실제 앱을 다시 깔아 둔다.
+- **강화 런타임**: `build-app.sh`가 `--options runtime`으로 서명한다. 동적 라이브러리를 새로 쓰게 되면 이 때문에 막히는지 확인한다.
+- **업데이트 점검**: 가짜 릴리스로 끝까지 시험할 수 있다. 버전을 올린 릴리스 dmg와 `.sig`를 만들고, 버전을 낮춘 디버그 앱을 임시 폴더에 복사한 뒤, `{"tag_name":"v…","assets":[{"name":"Grabby-….dmg","browser_download_url":"file://…","digest":"sha256:…"},{"name":"Grabby-….dmg.sig","browser_download_url":"file://….sig"}]}` 피드로 `-updateFeed file://… -autoInstallUpdate YES -checkUpdates YES -lastUpdateCheck '<date>2000-01-01T00:00:00Z</date>'`를 주고 실행한다. 점검용 앱은 실제 앱과 같은 UserDefaults를 쓰므로, 끝나면 실제 앱을 다시 깔아 둔다.
 - **이 Mac 설정**: 단축키는 ⌃⌘ 묶음을 쓴다(⇧⌘3·4·5는 macOS 스크린샷과 겹침).

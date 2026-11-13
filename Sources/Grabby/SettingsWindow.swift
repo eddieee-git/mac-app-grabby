@@ -101,7 +101,10 @@ final class AppSettings: ObservableObject {
     @Published var whiteboardTool: Tool { didSet { defaults.set(whiteboardTool.key, forKey: "whiteboardTool") } }
 
     /// 보관할 캡처 개수(고정한 캡처는 빼고 센다). 0이면 무제한.
-    @Published var keepCount: Int { didSet { defaults.set(keepCount, forKey: "keepCount"); CaptureStore.shared.prune() } }
+    @Published var keepCount: Int { didSet { defaults.set(keepCount, forKey: "keepCount"); CaptureStore.shared.tidy() } }
+    /// 며칠 지난 캡처를 지울지. 0이면 지우지 않는다.
+    @Published var keepDays: Int { didSet { defaults.set(keepDays, forKey: "keepDays"); CaptureStore.shared.tidy() } }
+    static let keepDaysOptions = [0, 1, 7, 30, 90]
     static let keepCountOptions = [50, 100, 200, 500, 0]
     @Published var captureSound: Bool { didSet { defaults.set(captureSound, forKey: "captureSound") } }
     @Published var boardStyle: BoardStyle { didSet { defaults.set(boardStyle.rawValue, forKey: "boardStyle") } }
@@ -239,6 +242,7 @@ final class AppSettings: ObservableObject {
         captureTool = defaults.string(forKey: "captureTool").flatMap(Tool.init(key:)) ?? .select
         whiteboardTool = defaults.string(forKey: "whiteboardTool").flatMap(Tool.init(key:)) ?? .pen
         keepCount = defaults.object(forKey: "keepCount") as? Int ?? 100
+        keepDays = defaults.object(forKey: "keepDays") as? Int ?? 0
         captureSound = defaults.object(forKey: "captureSound") as? Bool ?? true
         boardStyle = defaults.string(forKey: "boardStyle").flatMap(BoardStyle.init) ?? .white
         beautifyBackground = defaults.string(forKey: "beautifyBackground").flatMap(Beautifier.Background.init) ?? .ocean
@@ -352,6 +356,11 @@ private struct SettingsView: View {
                 Picker(L("보관할 캡처 수"), selection: $settings.keepCount) {
                     ForEach(AppSettings.keepCountOptions, id: \.self) { count in
                         Text(count == 0 ? L("무제한") : L("%ld개", count)).tag(count)
+                    }
+                }
+                Picker(L("오래된 캡처 지우기"), selection: $settings.keepDays) {
+                    ForEach(AppSettings.keepDaysOptions, id: \.self) { days in
+                        Text(days == 0 ? L("지우지 않음") : L("%ld일 지나면", days)).tag(days)
                     }
                 }
                 Text(L("고정(★)한 캡처는 개수에 넣지 않고 지우지 않아요."))

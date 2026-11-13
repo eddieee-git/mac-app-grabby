@@ -1,5 +1,6 @@
 import AppKit
 import Carbon
+import CryptoKit
 
 // 자동 점검. Xcode 없이(Command Line Tools만으로) 돌릴 수 있게 앱 안에 둔다.
 // 실행: ./scripts/test.sh  (또는 swift run Grabby --self-test)
@@ -42,6 +43,8 @@ enum SelfTest {
             ("KeyTests.displayText", SelfTest_KeyTests.test_displayText),
             ("KeyTests.versionComparison", SelfTest_KeyTests.test_versionComparison),
             ("KeyTests.parsesReleaseAndChecksum", SelfTest_KeyTests.test_parsesReleaseAndChecksum),
+            ("KeyTests.verifiesUpdateSignature", SelfTest_KeyTests.test_verifiesUpdateSignature),
+            ("StoreTests.pruneOldKeepsRecentAndKept", SelfTest_StoreTests.test_pruneOldKeepsRecentAndKept),
             ("KeyTests.codeLinksOpenOnlyWebAddresses", SelfTest_KeyTests.test_codeLinksOpenOnlyWebAddresses),
             ("KeyTests.readsQRCode", SelfTest_KeyTests.test_readsQRCode),
             ("StoreTests.pruneKeepsNewestAndKept", SelfTest_StoreTests.test_pruneKeepsNewestAndKept),
@@ -258,12 +261,14 @@ enum SelfTest_KeyTests {
     static func test_parsesReleaseAndChecksum() throws {
         let json = """
         {"tag_name":"v0.4.0","assets":[{"name":"notes.txt","browser_download_url":"https://example.com/notes.txt"},
-        {"name":"Grabby-0.4.0.dmg","browser_download_url":"https://example.com/Grabby-0.4.0.dmg","digest":"sha256:ABC123"}]}
+        {"name":"Grabby-0.4.0.dmg","browser_download_url":"https://example.com/Grabby-0.4.0.dmg","digest":"sha256:ABC123"},
+        {"name":"Grabby-0.4.0.dmg.sig","browser_download_url":"https://example.com/Grabby-0.4.0.dmg.sig"}]}
         """
         let release = UpdateChecker.parse(Data(json.utf8))
         expect(release?.version == "0.4.0")
         expect(release?.dmg?.lastPathComponent == "Grabby-0.4.0.dmg")
         expect(release?.sha256 == "abc123")
+        expect(release?.signature?.lastPathComponent == "Grabby-0.4.0.dmg.sig")
         expect(UpdateChecker.parse(Data(#"{"tag_name":"v1.0"}"#.utf8))?.dmg == nil)
 
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("grabby-sha-test")
@@ -271,6 +276,17 @@ enum SelfTest_KeyTests {
         defer { try? FileManager.default.removeItem(at: file) }
         expect(try Updater.sha256(of: file) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
         expect(!Updater.canReplace(URL(fileURLWithPath: "/Volumes/Grabby/Grabby.app")))
+    }
+
+    static func test_verifiesUpdateSignature() throws {
+        let key = Curve25519.Signing.PrivateKey()
+        let publicKey = key.publicKey.rawRepresentation.base64EncodedString()
+        let data = Data("Grabby update".utf8)
+        let signature = Data(try key.signature(for: data).base64EncodedString().utf8)
+        expect(Updater.isSigned(data, signature: signature, publicKey: publicKey))
+        expect(!Updater.isSigned(Data("tampered".utf8), signature: signature, publicKey: publicKey))
+        expect(!Updater.isSigned(data, signature: signature))   // 다른 키(앱에 든 공개 키)로는 통과하지 않는다
+        expect(!Updater.isSigned(data, signature: Data("not base64".utf8), publicKey: publicKey))
     }
 
     private static func key(_ chars: String, code: Int, flags: NSEvent.ModifierFlags = []) -> NSEvent {
@@ -341,6 +357,19 @@ enum SelfTest_StoreTests {
     }
 
     private static var image: CGImage { ScreenShot.white(width: 20, height: 10)! }
+
+    static func test_pruneOldKeepsRecentAndKept() {
+        let (store, dir) = tempStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        for _ in 0..<3 { store.add(image, scale: 1) }
+        store.setKept(store.items.last!, true)
+        expect(store.pruneOld(days: 0, now: Date().addingTimeInterval(100 * 86_400)) == 0)   // 끈 상태
+        expect(store.pruneOld(days: 7, now: Date()) == 0)                                    // 아직 7일 안 됨
+        let removed = store.pruneOld(days: 7, now: Date().addingTimeInterval(8 * 86_400))
+        store.flush()
+        expect(removed == 2)
+        expect(store.items.count == 1 && store.items[0].isKept)
+    }
 
     static func test_pruneKeepsNewestAndKept() {
         let (store, dir) = tempStore()

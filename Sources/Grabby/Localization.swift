@@ -140,6 +140,11 @@ enum Localization {
         "⌘, ⌃, ⌥ 중 하나와 함께 누르세요.": "Press together with ⌘, ⌃ or ⌥.",
         "%@에서 쓰는 단축키예요.": "Already used by %@.",
         // 새 기능
+        "켜면 하루 한 번 GitHub에 최신 버전 번호만 물어보고, 새 버전이 나오면 메뉴에서 바로 설치할 수 있어요.": "When on, Grabby asks GitHub for the latest version number once a day, and you can install new versions from the menu.",
+        "업데이트 서명이 맞지 않아요. 설치하지 않았어요.": "The update signature doesn't match. Nothing was installed.",
+        "오래된 캡처 지우기": "Delete old captures",
+        "지우지 않음": "Never",
+        "%ld일 지나면": "After %ld days",
         "전체 화면 캡처는 편집 없이 바로 복사": "Copy full-screen captures right away, without editing",
         "Grabby %@로 업데이트했어요": "Updated to Grabby %@",
         "이 릴리스에는 자동으로 설치할 파일이 없어요.": "This release has no file to install automatically.",

@@ -13,6 +13,8 @@ enum UpdateChecker {
         let version: String
         let dmg: URL?
         let sha256: String?
+        /// dmg와 함께 올린 `.sig`(Ed25519 서명). 없으면 앱 안에서 설치하지 않는다.
+        var signature: URL? = nil
     }
 
     /// 확인할 주소. 디버그 빌드에서는 `-updateFeed <주소>`로 바꿔 점검할 수 있다.
@@ -53,7 +55,10 @@ enum UpdateChecker {
         let url = (dmg?["browser_download_url"] as? String).flatMap(URL.init(string:))
         var sha: String?
         if let digest = dmg?["digest"] as? String, digest.hasPrefix("sha256:") { sha = String(digest.dropFirst(7)).lowercased() }
-        return Release(version: version, dmg: url, sha256: sha)
+        let sigName = (dmg?["name"] as? String).map { $0 + ".sig" }
+        let sig = assets.first { $0["name"] as? String == sigName }
+        let sigURL = (sig?["browser_download_url"] as? String).flatMap(URL.init(string:))
+        return Release(version: version, dmg: url, sha256: sha, signature: sigURL)
     }
 
     /// "0.10.0"이 "0.9.1"보다 새 것이라고 판단하도록 숫자 단위로 비교한다.

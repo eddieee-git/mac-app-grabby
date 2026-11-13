@@ -24,8 +24,12 @@ fi
 
 ./scripts/test.sh
 ./scripts/build-app.sh
+if [[ ! -f "build/Grabby-$version.dmg.sig" ]]; then
+    echo "업데이트 서명(.sig)이 없어요. ~/.config/grabby/update-signing.key를 확인해 주세요."
+    exit 1
+fi
 
 git tag -a "$tag" -m "Grabby $version"
 git push origin "$tag"
-gh release create "$tag" "build/Grabby-$version.dmg" --title "Grabby $version" --notes-file "$notes"
+gh release create "$tag" "build/Grabby-$version.dmg" "build/Grabby-$version.dmg.sig" --title "Grabby $version" --notes-file "$notes"
 echo "릴리스를 만들었어요: $tag"
