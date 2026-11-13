@@ -24,7 +24,6 @@ fi
 
 ./scripts/test.sh
 ./scripts/build-app.sh
-cp build/Grabby.dmg "build/Grabby-$version.dmg"
 
 git tag -a "$tag" -m "Grabby $version"
 git push origin "$tag"

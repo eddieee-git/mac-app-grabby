@@ -40,7 +40,7 @@ The app's interface is available in Korean and English (Settings → General →
    - **macOS 15 (Sequoia) or later**: In System Settings → Privacy & Security, scroll to the bottom, click **Open Anyway** next to Grabby, then click **Open**.
    - **macOS 14 (Sonoma)**: In Applications, **right-click Grabby → Open**.
 
-   After the first time, it opens normally.
+   After the first time, it opens normally. If you prefer Terminal, run `xattr -dr com.apple.quarantine /Applications/Grabby.app` instead.
 4. The Getting Started window appears on first launch. Turn on **Screen Recording** permission, then click **Restart After Turning On**.
    If you'd rather keep the macOS screenshot shortcuts, click **Use ⌃⌘ Keys** in Getting Started.
 
@@ -56,6 +56,7 @@ Use the camera icon in the menu bar to capture, open the capture window, or open
    - The loupe next to the cursor lets you line up to the pixel. Press **C** to copy the center pixel's color (#RRGGBB).
 2. Draw with the toolbar that appears. Click a mark again to move it, delete it, or change its color.
 3. Press **↩** to copy to the clipboard and add it to the tab window. Paste with **⌘V** in your app.
+   If you close with **Esc** or ✕ instead, the selected area still goes to the tab window without being copied (you can turn this off in Settings).
 
 Press **?** while capturing to see every shortcut.
 
@@ -92,7 +93,7 @@ You can also pick 3, 5, or 10 seconds from the menu bar. The remaining seconds a
 | ⌘B | Beautify and copy |
 | ⌘R | Read QR |
 | ? | Shortcut help |
-| Esc | Clear selection / cancel |
+| Esc | Clear selection / close (keeps the selected area in tabs without copying) |
 
 ### Editing tools (capture screen and tab window)
 
@@ -130,7 +131,7 @@ Menu bar → Settings…
 
 | Tab | Items |
 |---|---|
-| General | Language (한국어/English), theme, launch at login, confirm before deleting tabs, captures to keep, capture sound, show the tab window after capturing, timer delay, bring back pinned captures, open QR links right away, new version alerts (off by default) |
+| General | Language (한국어/English), theme, launch at login, confirm before deleting tabs, captures to keep, capture sound, keep in tabs when closed with Esc, show the tab window after capturing, timer delay, bring back pinned captures, open QR links right away, new version alerts and install from the menu (off by default) |
 | Editing | Palette (add, remove, drag to reorder) and default color, default width, remember last style, capture toolbar (two rows/one row, center/right, hint), capture only the picked window, starting tools, beautify background and padding, whiteboard background |
 | Saving | Default save folder, format (PNG/JPEG), save without a dialog, text recognition for search, clear recognized text |
 | Shortcuts | Change global shortcuts, switch to ⌃⌘ keys at once; warnings for other capture apps and macOS screenshot shortcuts |
@@ -148,7 +149,7 @@ Turn Grabby on in System Settings → Privacy & Security → Screen & System Aud
 Captures in the tab window live in `~/Library/Application Support/Grabby/Captures` (Settings → About → Open Capture Folder). To save files elsewhere, use ⌘S or **Save All** in the tab window. When you exceed the number to keep, the oldest are removed first, but ★ kept captures are never removed.
 
 **Does Grabby send anything over the internet?**
-Not by default. Capture, text recognition (OCR), and QR reading happen entirely on your Mac, and no account is needed. Only if you turn on **Tell me about new versions** in Settings → General does Grabby ask GitHub for the latest version number, once a day.
+Not by default. Capture, text recognition (OCR), and QR reading happen entirely on your Mac, and no account is needed. Only if you turn on **Tell me about new versions** in Settings → General does Grabby ask GitHub for the latest version number, once a day. It downloads a new dmg from GitHub only when you click **Install Version…** in the menu.
 
 **I'm uneasy about QR links opening by themselves.**
 Grabby opens only web addresses (http, https); file addresses and addresses that open other apps are only copied. To stop opening links right away, turn off **Open QR code links in the browser right away** in Settings → General. If there are several QR codes, none are opened and all are copied.
@@ -161,14 +162,15 @@ Grabby records every capture deletion and its reason in `~/Library/Application S
 Builds with Command Line Tools only, no Xcode.
 
 ```bash
-./scripts/build-app.sh      # build/Grabby.app, build/Grabby.dmg
+./scripts/build-app.sh      # build/Grabby.app, build/Grabby-<version>.dmg
 ./scripts/test.sh           # self-tests (doesn't touch your real captures or settings)
 ./scripts/release.sh        # test → build → tag → GitHub release with the dmg
 ```
 
 - If Screen Recording permission resets after every rebuild, create a local signing certificate once (no Apple account needed): `./scripts/make-signing-cert.sh`
 - The icon is drawn by `scripts/make-icon.swift`.
-- The testing arguments `-showInDock YES` (show in Dock) and `-captureFolder <path>` (use another capture folder) work only in debug builds: `GRABBY_DEBUG=1 ./scripts/build-app.sh`
+- The testing arguments `-showInDock YES` (show in Dock), `-captureFolder <path>` (use another capture folder), `-updateFeed <url>` (check another update address) and `-autoInstallUpdate YES` (install a new version without asking) work only in debug builds: `GRABBY_DEBUG=1 ./scripts/build-app.sh`
+- Developer notes (structure, conventions, testing and release steps) are in [CLAUDE.md](CLAUDE.md) (Korean).
 
 ## License
 

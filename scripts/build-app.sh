@@ -1,5 +1,5 @@
 #!/bin/zsh
-# build/Grabby.app과 배포용 build/Grabby.dmg를 만든다. Xcode 없이 Command Line Tools만으로 빌드한다.
+# build/Grabby.app과 배포용 build/Grabby-<버전>.dmg를 만든다. Xcode 없이 Command Line Tools만으로 빌드한다.
 # Apple 실리콘 Mac 전용이다.
 set -e
 cd "$(dirname "$0")/.."
@@ -32,13 +32,16 @@ if [[ $config == debug ]]; then
 fi
 
 # 내려받은 쪽에서 응용 프로그램 폴더로 끌어다 놓을 수 있게 바로가기를 함께 넣는다.
+# dmg 이름에 Info.plist의 버전을 넣는다(예: build/Grabby-0.3.1.dmg).
+version=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Resources/Info.plist)
+dmg="build/Grabby-$version.dmg"
 staging=build/dmg
-rm -rf "$staging" build/Grabby.dmg
+rm -rf "$staging" "$dmg" build/Grabby.dmg
 mkdir -p "$staging"
 cp -R "$app" "$staging/"
 ln -s /Applications "$staging/Applications"
-hdiutil create -quiet -volname Grabby -srcfolder "$staging" -format UDZO build/Grabby.dmg
+hdiutil create -quiet -volname Grabby -srcfolder "$staging" -format UDZO "$dmg"
 rm -rf "$staging"
 
 echo "$app"
-echo build/Grabby.dmg
+echo "$dmg"
