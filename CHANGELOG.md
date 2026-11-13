@@ -2,7 +2,7 @@
 
 버전마다 자세한 내용은 [docs/releases](docs/releases)와 [GitHub 릴리스](https://github.com/eddieee-git/mac-app-grabby/releases)에 있어요. English: [CHANGELOG.en.md](CHANGELOG.en.md)
 
-## 0.3.2 (릴리스 전)
+## 0.3.2 (2026-11-13)
 
 - 전체 화면 캡처는 편집 화면 없이 바로 복사하고 탭에 넣기(설정에서 편집 화면으로 되돌리기, 여러 모니터를 한 장으로)
 - Esc로 닫아 탭에만 남긴 캡처를 알림의 **되돌리기**로 빼기

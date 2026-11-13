@@ -2,7 +2,7 @@
 
 Details for each version are in [docs/releases](docs/releases) and on [GitHub Releases](https://github.com/eddieee-git/mac-app-grabby/releases). 한국어: [CHANGELOG.md](CHANGELOG.md)
 
-## 0.3.2 (unreleased)
+## 0.3.2 (2026-11-13)
 
 - Full-screen capture copies right away and adds to tabs without the editor (switch back in Settings, or capture all displays as one image)
 - **Undo** in the toast removes a capture that was kept in tabs after closing with Esc
