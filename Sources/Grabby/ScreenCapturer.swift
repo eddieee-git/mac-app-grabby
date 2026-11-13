@@ -2,6 +2,26 @@ import AppKit
 import ScreenCaptureKit
 
 /// 한 화면을 통째로 찍은 이미지. 영역 선택은 이 멈춘 화면 위에서 한다.
+/// 여러 화면을 실제 배치대로 한 장에 그린다. 배율이 다르면 가장 큰 배율에 맞춘다.
+/// `frames`는 전역 좌표(왼쪽 아래 원점, 포인트). 돌려주는 frame은 모두를 감싼 영역.
+func stitchScreens(_ parts: [(image: CGImage, frame: CGRect, scale: CGFloat)]) -> (image: CGImage, frame: CGRect, scale: CGFloat)? {
+    guard let first = parts.first else { return nil }
+    if parts.count == 1 { return first }
+    let union = parts.dropFirst().reduce(first.frame) { $0.union($1.frame) }
+    let scale = parts.map(\.scale).max() ?? 1
+    guard let context = CGContext(data: nil, width: Int((union.width * scale).rounded()), height: Int((union.height * scale).rounded()),
+                                  bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue) else { return nil }
+    context.interpolationQuality = .high
+    for part in parts {
+        // CGContext도 왼쪽 아래가 원점이라 전역 좌표를 그대로 옮기면 된다.
+        context.draw(part.image, in: CGRect(x: (part.frame.minX - union.minX) * scale, y: (part.frame.minY - union.minY) * scale,
+                                            width: part.frame.width * scale, height: part.frame.height * scale))
+    }
+    guard let image = context.makeImage() else { return nil }
+    return (image, union, scale)
+}
+
 struct ScreenShot {
     let screen: NSScreen
     let displayID: CGDirectDisplayID

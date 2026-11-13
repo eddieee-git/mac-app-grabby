@@ -44,6 +44,8 @@ enum SelfTest {
             ("KeyTests.versionComparison", SelfTest_KeyTests.test_versionComparison),
             ("KeyTests.parsesReleaseAndChecksum", SelfTest_KeyTests.test_parsesReleaseAndChecksum),
             ("KeyTests.verifiesUpdateSignature", SelfTest_KeyTests.test_verifiesUpdateSignature),
+            ("KeyTests.stitchesScreens", SelfTest_KeyTests.test_stitchesScreens),
+            ("KeyTests.clipboardKeepsSizeAndScale", SelfTest_KeyTests.test_clipboardKeepsSizeAndScale),
             ("StoreTests.pruneOldKeepsRecentAndKept", SelfTest_StoreTests.test_pruneOldKeepsRecentAndKept),
             ("KeyTests.codeLinksOpenOnlyWebAddresses", SelfTest_KeyTests.test_codeLinksOpenOnlyWebAddresses),
             ("KeyTests.readsQRCode", SelfTest_KeyTests.test_readsQRCode),
@@ -287,6 +289,35 @@ enum SelfTest_KeyTests {
         expect(!Updater.isSigned(Data("tampered".utf8), signature: signature, publicKey: publicKey))
         expect(!Updater.isSigned(data, signature: signature))   // 다른 키(앱에 든 공개 키)로는 통과하지 않는다
         expect(!Updater.isSigned(data, signature: Data("not base64".utf8), publicKey: publicKey))
+    }
+
+    private static func solid(_ width: Int, _ height: Int) -> CGImage {
+        let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue)!
+        context.setFillColor(NSColor.systemRed.cgColor)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        return context.makeImage()!
+    }
+
+    static func test_stitchesScreens() {
+        // 왼쪽 1x 화면(100x50)과 그 오른쪽 위로 걸친 2x 화면(80x60): 합친 영역 180x70, 배율 2
+        let whole = stitchScreens([(solid(100, 50), CGRect(x: 0, y: 0, width: 100, height: 50), 1),
+                                   (solid(160, 120), CGRect(x: 100, y: 10, width: 80, height: 60), 2)])
+        expect(whole?.frame == CGRect(x: 0, y: 0, width: 180, height: 70))
+        expect(whole?.scale == 2)
+        expect(whole?.image.width == 360 && whole?.image.height == 140)
+        let single = stitchScreens([(solid(10, 10), CGRect(x: 5, y: 5, width: 10, height: 10), 1)])
+        expect(single?.frame.origin == CGPoint(x: 5, y: 5))
+    }
+
+    static func test_clipboardKeepsSizeAndScale() {
+        let board = NSPasteboard(name: NSPasteboard.Name("com.eddieee.Grabby.selftest"))
+        defer { board.releaseGlobally() }
+        Clipboard.copy(solid(40, 20), scale: 2, to: board)
+        let back = Clipboard.image(from: board)
+        expect(back?.image.width == 40 && back?.image.height == 20)
+        expect(back?.scale == 2)
+        expect(board.data(forType: .png) != nil)
     }
 
     private static func key(_ chars: String, code: Int, flags: NSEvent.ModifierFlags = []) -> NSEvent {

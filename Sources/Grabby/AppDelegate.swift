@@ -98,6 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         PinWindow.saveAll()
+        Clipboard.resolvePending()
         CaptureStore.shared.flush()
     }
 
@@ -386,6 +387,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let displayID = CGDirectDisplayID(number.uint32Value)
         Task { @MainActor in
             do {
+                if settings.fullScreenAllDisplays, NSScreen.screens.count > 1 {
+                    let shots = try await ScreenCapturer.captureAll()
+                    guard let whole = stitchScreens(shots.map { ($0.image, $0.screen.frame, $0.scale) }) else {
+                        startSession(.fullScreen)
+                        return
+                    }
+                    save(CaptureResult(image: whole.image, pixelScale: whole.scale,
+                                       rect: CGRect(origin: .zero, size: whole.frame.size), displayID: displayID,
+                                       screenFrame: whole.frame, remembersArea: false))
+                    return
+                }
                 guard let shot = try await ScreenCapturer.capture(displayID: displayID) else {
                     startSession(.fullScreen)
                     return
@@ -440,14 +452,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let (item, pruned) = CaptureStore.shared.add(result.image, scale: result.pixelScale,
                                                      original: result.original, annotations: result.annotations)
         if copy { Clipboard.copy(result.image, scale: result.pixelScale) }
-        if !result.isWhiteboard {
+        if !result.isWhiteboard, result.remembersArea {
             UserDefaults.standard.set(NSStringFromRect(result.rect), forKey: lastRectKey)
             UserDefaults.standard.set(Int(result.displayID), forKey: lastDisplayKey)
         }
         CaptureFeedback.flash(result.globalRect)
         let message = !copy ? L("탭에만 남겼어요 · 복사는 하지 않았어요")
             : pruned > 0 ? L("복사했어요 · 오래된 캡처 %ld개를 정리했어요", pruned) : L("복사했어요 · ⌘V로 붙여 넣기")
-        Toast.show(message, image: CaptureStore.shared.thumbnail(for: item))
+        if copy {
+            Toast.show(message, image: CaptureStore.shared.thumbnail(for: item))
+        } else {
+            // Esc로 닫아 탭에만 남긴 것은 원치 않았을 수 있으니 바로 되돌릴 수 있게 한다.
+            Toast.show(message, image: CaptureStore.shared.thumbnail(for: item), action: (L("되돌리기"), {
+                CaptureStore.shared.remove(item)
+                Toast.show(L("탭에서 뺐어요"))
+            }))
+        }
         if settings.openLibraryAfterCapture {
             if library == nil { library = LibraryWindowController() }
             library?.showWithoutFocus()

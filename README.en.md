@@ -11,6 +11,7 @@
   <a href="#install">Install</a> ·
   <a href="#shortcuts">Shortcuts</a> ·
   <a href="#faq">FAQ</a> ·
+  <a href="CHANGELOG.en.md">Changelog</a> ·
   <a href="README.md">한국어</a>
 </p>
 
@@ -132,10 +133,10 @@ Menu bar → Settings…
 | Tab | Items |
 |---|---|
 | General | Language (한국어/English), theme, launch at login, confirm before deleting tabs, captures to keep, delete old captures (1/7/30/90 days), capture sound, keep in tabs when closed with Esc, show the tab window after capturing, timer delay, bring back pinned captures, open QR links right away, new version alerts and install from the menu (off by default) |
-| Editing | Palette (add, remove, drag to reorder) and default color, default width, remember last style, capture toolbar (two rows/one row, center/right, hint), capture only the picked window, copy full-screen captures right away, starting tools, beautify background and padding, whiteboard background |
+| Editing | Palette (add, remove, drag to reorder) and default color, default width, remember last style, capture toolbar (two rows/one row, center/right, hint), capture only the picked window, copy full-screen captures right away and capture all displays as one image, starting tools, beautify background and padding, whiteboard background |
 | Saving | Default save folder, format (PNG/JPEG), save without a dialog, text recognition for search, clear recognized text |
 | Shortcuts | Change global shortcuts, switch to ⌃⌘ keys at once; warnings for other capture apps and macOS screenshot shortcuts |
-| About | Version, open capture folder, Getting Started, Restart |
+| About | Version, library size, open capture folder, Getting Started, Restart |
 
 ## FAQ
 
@@ -156,6 +157,17 @@ Grabby opens only web addresses (http, https); file addresses and addresses that
 
 **I think I lost a capture.**
 Grabby records every capture deletion and its reason in `~/Library/Application Support/Grabby/events.log`. Please include that file when reporting a problem.
+
+## Uninstall
+
+1. Choose **Quit Grabby** from Grabby's menu bar menu.
+2. Move Grabby from Applications to the Trash.
+3. To also remove saved captures and settings, run in Terminal:
+   ```bash
+   rm -rf ~/Library/Application\ Support/Grabby
+   defaults delete com.eddieee.Grabby
+   ```
+4. In System Settings → Privacy & Security → Screen & System Audio Recording, select Grabby and click **−**. If you turned on launch at login, remove it from General → Login Items too.
 
 ## Build it yourself
 

@@ -4,15 +4,28 @@ import AppKit
 enum Toast {
     private static var panel: NSPanel?
     private static var hideWork: DispatchWorkItem?
+    private static var actionHandler: (() -> Void)?
+
+    /// 버튼을 누르면 할 일. 알림 안 버튼이 부른다.
+    private final class ActionTarget: NSObject {
+        @objc func run() {
+            let handler = Toast.actionHandler
+            Toast.hide()
+            handler?()
+        }
+    }
+    private static let target = ActionTarget()
 
     /// 바로 치운다(타이머 캡처에서 알림이 찍히지 않게).
     static func hide() {
         hideWork?.cancel()
         panel?.orderOut(nil)
         panel = nil
+        actionHandler = nil
     }
 
-    static func show(_ message: String, image: NSImage? = nil) {
+    /// `action`을 주면 알림에 버튼을 붙이고, 누를 수 있게 조금 더 오래 띄운다.
+    static func show(_ message: String, image: NSImage? = nil, action: (title: String, handler: () -> Void)? = nil) {
         panel?.orderOut(nil)
         hideWork?.cancel()
 
@@ -28,6 +41,13 @@ enum Toast {
             views.append(thumb)
         }
         views.append(label)
+        actionHandler = action?.handler
+        if let action {
+            let button = NSButton(title: action.title, target: target, action: #selector(ActionTarget.run))
+            button.bezelStyle = .rounded
+            button.controlSize = .small
+            views.append(button)
+        }
         let stack = NSStackView(views: views)
         stack.spacing = 10
         stack.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 8, right: 16)
@@ -55,7 +75,7 @@ enum Toast {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
-        panel.ignoresMouseEvents = true
+        panel.ignoresMouseEvents = action == nil
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.contentView = background
         panel.alphaValue = 0
@@ -66,10 +86,10 @@ enum Toast {
         let work = DispatchWorkItem {
             NSAnimationContext.runAnimationGroup({ $0.duration = 0.3; panel.animator().alphaValue = 0 }) {
                 panel.orderOut(nil)
-                if Toast.panel === panel { Toast.panel = nil }
+                if Toast.panel === panel { Toast.panel = nil; Toast.actionHandler = nil }
             }
         }
         hideWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + (action == nil ? 1.4 : 4), execute: work)
     }
 }

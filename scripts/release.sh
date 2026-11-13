@@ -31,5 +31,10 @@ fi
 
 git tag -a "$tag" -m "Grabby $version"
 git push origin "$tag"
-gh release create "$tag" "build/Grabby-$version.dmg" "build/Grabby-$version.dmg.sig" --title "Grabby $version" --notes-file "$notes"
+# 릴리스 노트 끝에 dmg의 SHA-256을 붙여 올린다(저장소의 노트 파일은 그대로 둔다).
+body=$(mktemp)
+cat "$notes" > "$body"
+printf '\n## SHA-256\n\n```\n%s  Grabby-%s.dmg\n```\n' "$(shasum -a 256 "build/Grabby-$version.dmg" | cut -d' ' -f1)" "$version" >> "$body"
+gh release create "$tag" "build/Grabby-$version.dmg" "build/Grabby-$version.dmg.sig" --title "Grabby $version" --notes-file "$body"
+rm -f "$body"
 echo "릴리스를 만들었어요: $tag"

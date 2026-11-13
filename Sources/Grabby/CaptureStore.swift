@@ -363,8 +363,7 @@ enum EventLog {
 
 enum Clipboard {
     /// 클립보드에 있는 이미지와 배율(픽셀 수 / 포인트 수). 이미지가 없으면 nil.
-    static func image() -> (image: CGImage, scale: CGFloat)? {
-        let pasteboard = NSPasteboard.general
+    static func image(from pasteboard: NSPasteboard = .general) -> (image: CGImage, scale: CGFloat)? {
         guard let nsImage = NSImage(pasteboard: pasteboard) else { return nil }
         var scale: CGFloat = 1
         if let rep = nsImage.representations.compactMap({ $0 as? NSBitmapImageRep }).first, rep.size.width > 0 {
@@ -375,14 +374,58 @@ enum Clipboard {
         return (cg, scale)
     }
 
-    /// PNG로 복사한다. 해상도 정보(DPI)를 넣어 문서 앱에서도 화면에서 보던 크기로 붙여 넣어지게 한다.
-    static func copy(_ image: CGImage, scale: CGFloat) {
-        let rep = NSBitmapImageRep(cgImage: image)
-        rep.size = NSSize(width: CGFloat(image.width) / scale, height: CGFloat(image.height) / scale)
-        let pasteboard = NSPasteboard.general
+    /// PNG·TIFF로 복사한다. 해상도 정보(DPI)를 넣어 문서 앱에서도 화면에서 보던 크기로 붙여 넣어지게 한다.
+    /// 5K 전체 화면이면 PNG로 바꾸는 데 0.2초쯤 걸려서, 클립보드에는 "줄 수 있다"고만 올려 두고
+    /// 뒤에서 미리 만들어 둔다. 붙여 넣을 때 아직 안 됐으면 그때 만든다.
+    static func copy(_ image: CGImage, scale: CGFloat, to pasteboard: NSPasteboard = .general) {
+        let provider = ImageProvider(image: image, scale: scale)
+        let item = NSPasteboardItem()
+        item.setDataProvider(provider, forTypes: [.png, .tiff])
         pasteboard.clearContents()
-        if let png = rep.representation(using: .png, properties: [:]) { pasteboard.setData(png, forType: .png) }
-        if let tiff = rep.tiffRepresentation { pasteboard.setData(tiff, forType: .tiff) }
+        pasteboard.writeObjects([item])
+        if pasteboard == .general { pending = (provider, pasteboard.changeCount) }
+        DispatchQueue.global(qos: .userInitiated).async { _ = provider.data(for: .png) }
+    }
+
+    private static var pending: (provider: ImageProvider, changeCount: Int)?
+
+    /// 앱이 끝나면 약속만 해 둔 이미지를 줄 수 없으니, 아직 Grabby가 넣은 그대로면 실제 데이터로 바꿔 둔다.
+    static func resolvePending() {
+        guard let pending, NSPasteboard.general.changeCount == pending.changeCount else { return }
+        let pasteboard = NSPasteboard.general
+        let png = pending.provider.data(for: .png), tiff = pending.provider.data(for: .tiff)
+        pasteboard.clearContents()
+        if let png { pasteboard.setData(png, forType: .png) }
+        if let tiff { pasteboard.setData(tiff, forType: .tiff) }
+        self.pending = nil
+    }
+
+    private final class ImageProvider: NSObject, NSPasteboardItemDataProvider, @unchecked Sendable {
+        private let image: CGImage
+        private let scale: CGFloat
+        private let lock = NSLock()
+        private var cache: [NSPasteboard.PasteboardType: Data] = [:]
+
+        init(image: CGImage, scale: CGFloat) {
+            self.image = image
+            self.scale = scale
+        }
+
+        /// 여러 스레드에서 불려도 한 번만 만든다.
+        func data(for type: NSPasteboard.PasteboardType) -> Data? {
+            lock.lock()
+            defer { lock.unlock() }
+            if let data = cache[type] { return data }
+            let rep = NSBitmapImageRep(cgImage: image)
+            rep.size = NSSize(width: CGFloat(image.width) / scale, height: CGFloat(image.height) / scale)
+            let data = type == .png ? rep.representation(using: .png, properties: [:]) : rep.tiffRepresentation
+            cache[type] = data
+            return data
+        }
+
+        func pasteboard(_ pasteboard: NSPasteboard?, item: NSPasteboardItem, provideDataForType type: NSPasteboard.PasteboardType) {
+            if let data = data(for: type) { item.setData(data, forType: type) }
+        }
     }
 
     static func copy(text: String) {

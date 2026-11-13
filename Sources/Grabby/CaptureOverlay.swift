@@ -24,6 +24,8 @@ struct CaptureResult {
     let screenFrame: CGRect
     /// 화이트보드 결과는 화면을 찍은 게 아니므로 '마지막 영역'으로 기억하지 않는다.
     var isWhiteboard = false
+    /// 여러 화면을 한 장으로 합친 결과처럼 한 화면 안의 영역이 아니면 '마지막 영역'으로 기억하지 않는다.
+    var remembersArea = true
     var action: CaptureAction = .copy
 
     /// 캡처한 영역의 전역 좌표(왼쪽 아래 원점).
