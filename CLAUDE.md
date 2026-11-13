@@ -32,7 +32,7 @@ swift scripts/sign-update.swift public  # 업데이트 서명 키의 공개 키 
 
 1. `Resources/Info.plist`의 `CFBundleShortVersionString`(그리고 `CFBundleVersion` +1)을 올린다.
 2. `docs/releases/v<버전>.md`에 릴리스 노트를 쓴다(이전 노트 형식 참고: 설치와 업데이트 → 새 기능 → 바뀐 점 → 알려진 제한).
-3. README 두 개(`README.md`, `README.en.md`)를 함께 고친다.
+3. README 두 개(`README.md`, `README.en.md`)와 변경 기록 두 개(`CHANGELOG.md`, `CHANGELOG.en.md`, "릴리스 전"을 날짜로)를 함께 고친다. 릴리스 노트에는 `## English` 부분을 넣는다(SHA-256은 `release.sh`가 붙인다).
 4. 커밋하고 `main`을 push한 뒤 `./scripts/release.sh`.
 5. 확인: `gh api repos/eddieee-git/mac-app-grabby/releases/latest --jq '.tag_name, .assets[].digest'`의 digest가 `shasum -a 256 build/Grabby-<버전>.dmg`와 같은지.
 
