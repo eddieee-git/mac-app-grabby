@@ -46,8 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 ScreenCapturer.warmUp()
             }
         }
-        checkForUpdate()
-        Updater.announceIfUpdated()
+        AppUpdater.shared.start()
         if !UserDefaults.standard.bool(forKey: "didShowWelcome") {
             UserDefaults.standard.set(true, forKey: "didShowWelcome")
             welcome.show()
@@ -129,81 +128,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         buildStatusMenu()
     }
 
-    private var availableUpdate: UpdateChecker.Release?
-
-    /// 설정에서 켰을 때만 확인한다. 새 버전이 있으면 메뉴 맨 위에 알려 준다.
-    @objc func checkForUpdate() { checkForUpdate(force: false) }
-
-    /// 설정에서 방금 켰을 때는 하루를 기다리지 않고 바로 확인한다.
-    @objc func checkForUpdateNow() { checkForUpdate(force: true) }
-
-    private func checkForUpdate(force: Bool) {
-        guard settings.checkUpdates else { return }
-        UpdateChecker.check(force: force) { [weak self] release in
-            guard let self, let release else { return }
-            self.availableUpdate = release
-            self.buildStatusMenu()
-            #if DEBUG
-            // 점검용: `-autoInstallUpdate YES`면 묻지 않고 바로 설치한다.
-            if UserDefaults.standard.bool(forKey: "autoInstallUpdate") { self.startUpdate(release) }
-            #endif
-        }
-    }
-
-    @objc private func openReleasePage() { NSWorkspace.shared.open(UpdateChecker.releasesPage) }
-
-    /// 메뉴의 "새 버전 설치": 물어보고 내려받아 바꿔 넣는다. 그 자리에서 바꿀 수 없으면 릴리스 페이지를 연다.
-    @objc private func installUpdate() {
-        guard let release = availableUpdate else { return }
-        guard release.dmg != nil, release.signature != nil, Updater.canReplace(Bundle.main.bundleURL) else {
-            openReleasePage()
-            return
-        }
-        let alert = NSAlert()
-        alert.messageText = L("Grabby %@로 업데이트할까요?", release.version)
-        alert.informativeText = L("새 버전을 내려받아 확인한 뒤 바꿔 넣고 다시 시작해요. 화면 기록 권한을 다시 물으면 시스템 설정에서 Grabby를 껐다 켜 주세요.")
-        alert.addButton(withTitle: L("업데이트"))
-        alert.addButton(withTitle: L("바뀐 점 보기"))
-        alert.addButton(withTitle: L("나중에"))
-        NSApp.activate(ignoringOtherApps: true)
-        switch alert.runModal() {
-        case .alertFirstButtonReturn: startUpdate(release)
-        case .alertSecondButtonReturn: openReleasePage()
-        default: break
-        }
-    }
-
-    private func startUpdate(_ release: UpdateChecker.Release) {
-        Toast.show(L("새 버전을 내려받는 중이에요…"))
-        Task { @MainActor in
-            defer { self.buildStatusMenu() }
-            do {
-                self.buildStatusMenu()
-                try await Updater.install(release)
-            } catch {
-                let alert = NSAlert()
-                alert.messageText = L("업데이트하지 못했어요")
-                alert.informativeText = error.localizedDescription
-                alert.addButton(withTitle: L("릴리스 페이지 열기"))
-                alert.addButton(withTitle: L("닫기"))
-                NSApp.activate(ignoringOtherApps: true)
-                if alert.runModal() == .alertFirstButtonReturn { self.openReleasePage() }
-            }
-        }
-    }
-
     private func buildStatusMenu() {
         let menu = NSMenu()
-        if let release = availableUpdate {
-            if Updater.isInstalling {
-                let busy = NSMenuItem(title: L("새 버전 %@ 내려받는 중…", release.version), action: nil, keyEquivalent: "")
-                busy.isEnabled = false
-                menu.addItem(busy)
-            } else {
-                menu.addItem(item(L("새 버전 %@ 설치…", release.version), action: #selector(installUpdate)))
-            }
-            menu.addItem(.separator())
-        }
         let capture = item(HotKeyAction.captureArea.title, action: #selector(captureArea))
         let repeatLast = item(HotKeyAction.repeatLastArea.title, action: #selector(repeatLastArea))
         let fullScreen = item(HotKeyAction.captureFullScreen.title, action: #selector(captureFullScreen))
@@ -241,6 +167,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsItem.keyEquivalent = ","
         settingsItem.keyEquivalentModifierMask = .command
         menu.addItem(settingsItem)
+        menu.addItem(AppUpdater.shared.makeMenuItem())
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: L("Grabby 종료"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu

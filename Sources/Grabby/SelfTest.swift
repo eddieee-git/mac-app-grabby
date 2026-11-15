@@ -41,9 +41,7 @@ enum SelfTest {
             ("KeyTests.systemScreenshotShortcutsAreRejected", SelfTest_KeyTests.test_systemScreenshotShortcutsAreRejected),
             ("KeyTests.defaultShortcutsDoNotCollide", SelfTest_KeyTests.test_defaultShortcutsDoNotCollide),
             ("KeyTests.displayText", SelfTest_KeyTests.test_displayText),
-            ("KeyTests.versionComparison", SelfTest_KeyTests.test_versionComparison),
-            ("KeyTests.parsesReleaseAndChecksum", SelfTest_KeyTests.test_parsesReleaseAndChecksum),
-            ("KeyTests.verifiesUpdateSignature", SelfTest_KeyTests.test_verifiesUpdateSignature),
+            ("KeyTests.sharedUpdater", SelfTest_KeyTests.test_sharedUpdater),
             ("KeyTests.stitchesScreens", SelfTest_KeyTests.test_stitchesScreens),
             ("KeyTests.clipboardKeepsSizeAndScale", SelfTest_KeyTests.test_clipboardKeepsSizeAndScale),
             ("StoreTests.pruneOldKeepsRecentAndKept", SelfTest_StoreTests.test_pruneOldKeepsRecentAndKept),
@@ -253,42 +251,9 @@ enum SelfTest_KeyTests {
         expect(values == ["https://github.com/eddieee-git/mac-app-grabby"], "읽은 값: \(values)")
     }
 
-    static func test_versionComparison() {
-        expect(UpdateChecker.isNewer("0.10.0", than: "0.9.1"))
-        expect(UpdateChecker.isNewer("0.3", than: "0.2.9"))
-        expect(!UpdateChecker.isNewer("0.2.0", than: "0.2"))
-        expect(!UpdateChecker.isNewer("0.1.9", than: "0.2.0"))
-    }
-
-    static func test_parsesReleaseAndChecksum() throws {
-        let json = """
-        {"tag_name":"v0.4.0","assets":[{"name":"notes.txt","browser_download_url":"https://example.com/notes.txt"},
-        {"name":"Grabby-0.4.0.dmg","browser_download_url":"https://example.com/Grabby-0.4.0.dmg","digest":"sha256:ABC123"},
-        {"name":"Grabby-0.4.0.dmg.sig","browser_download_url":"https://example.com/Grabby-0.4.0.dmg.sig"}]}
-        """
-        let release = UpdateChecker.parse(Data(json.utf8))
-        expect(release?.version == "0.4.0")
-        expect(release?.dmg?.lastPathComponent == "Grabby-0.4.0.dmg")
-        expect(release?.sha256 == "abc123")
-        expect(release?.signature?.lastPathComponent == "Grabby-0.4.0.dmg.sig")
-        expect(UpdateChecker.parse(Data(#"{"tag_name":"v1.0"}"#.utf8))?.dmg == nil)
-
-        let file = FileManager.default.temporaryDirectory.appendingPathComponent("grabby-sha-test")
-        try Data("abc".utf8).write(to: file)
-        defer { try? FileManager.default.removeItem(at: file) }
-        expect(try Updater.sha256(of: file) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
-        expect(!Updater.canReplace(URL(fileURLWithPath: "/Volumes/Grabby/Grabby.app")))
-    }
-
-    static func test_verifiesUpdateSignature() throws {
-        let key = Curve25519.Signing.PrivateKey()
-        let publicKey = key.publicKey.rawRepresentation.base64EncodedString()
-        let data = Data("Grabby update".utf8)
-        let signature = Data(try key.signature(for: data).base64EncodedString().utf8)
-        expect(Updater.isSigned(data, signature: signature, publicKey: publicKey))
-        expect(!Updater.isSigned(Data("tampered".utf8), signature: signature, publicKey: publicKey))
-        expect(!Updater.isSigned(data, signature: signature))   // 다른 키(앱에 든 공개 키)로는 통과하지 않는다
-        expect(!Updater.isSigned(data, signature: Data("not base64".utf8), publicKey: publicKey))
+    static func test_sharedUpdater() {
+        let failures = AppUpdater.selfTest(appName: "Grabby", publicKey: AppUpdater.appPublicKey, format: AppUpdater.appSignatureFormat)
+        expect(failures.isEmpty, "공통 업데이트 점검 실패: \(failures)")
     }
 
     private static func solid(_ width: Int, _ height: Int) -> CGImage {

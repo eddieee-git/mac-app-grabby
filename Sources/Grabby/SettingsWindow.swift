@@ -123,7 +123,6 @@ final class AppSettings: ObservableObject {
         }
     }
     /// 새 버전이 있는지 하루에 한 번 GitHub에서 확인한다(처음에는 꺼져 있다).
-    @Published var checkUpdates: Bool { didSet { defaults.set(checkUpdates, forKey: "checkUpdates") } }
     /// 다시 켤 때 띄워 둔 캡처(핀)를 되살린다.
     @Published var restorePins: Bool { didSet { defaults.set(restorePins, forKey: "restorePins") } }
     /// 창을 골라 캡처할 때 겹친 다른 창 없이 그 창만 찍는다.
@@ -250,7 +249,6 @@ final class AppSettings: ObservableObject {
         beautifyPadding = defaults.object(forKey: "beautifyPadding") as? Int ?? 1
         timerSeconds = defaults.object(forKey: "timerSeconds") as? Int ?? 3
         textSearch = defaults.object(forKey: "textSearch") as? Bool ?? true
-        checkUpdates = defaults.bool(forKey: "checkUpdates")
         restorePins = defaults.object(forKey: "restorePins") as? Bool ?? true
         isolateWindow = defaults.object(forKey: "isolateWindow") as? Bool ?? true
         fullScreenInstant = defaults.object(forKey: "fullScreenInstant") as? Bool ?? true
@@ -379,19 +377,13 @@ private struct SettingsView: View {
                     .foregroundStyle(.secondary)
                 Toggle(L("다시 켤 때 띄워 둔 캡처 되살리기"), isOn: $settings.restorePins)
                 Toggle(L("QR 코드가 링크면 바로 브라우저로 열기"), isOn: $settings.openCodeLinks)
-                Toggle(L("새 버전이 나오면 알려 주기"), isOn: $settings.checkUpdates)
-                    .onChange(of: settings.checkUpdates) { _, on in
-                        if on { NSApp.sendAction(Selector(("checkForUpdateNow")), to: nil, from: nil) }
-                    }
-                Text(L("켜면 하루 한 번 GitHub에 최신 버전 번호만 물어봐요. 다른 정보는 보내지 않아요."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 Picker(L("타이머 캡처 시간"), selection: $settings.timerSeconds) {
                     ForEach(AppSettings.timerOptions, id: \.self) { Text(L("%ld초", $0)).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .id("segment8-\(settings.language.rawValue)")
             }
+            AppUpdaterSection(updater: .shared)
         }
         .formStyle(.grouped)
     }
