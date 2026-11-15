@@ -2,6 +2,14 @@
 
 Details for each version are in [docs/releases](docs/releases) and on [GitHub Releases](https://github.com/eddieee-git/mac-app-grabby/releases). 한국어: [CHANGELOG.md](CHANGELOG.md)
 
+## 0.3.3 (2026-11-15)
+
+- Automatic update checks are now on by default (stays off if you turned it off); automatic installs are a separate switch (off by default)
+- Updates use the updater shared by all five apps: **Check Now** in Settings, and the releases page is used when GitHub's rate limit is hit
+- Stronger update checks: installs only after the signature, SHA-256, bundle ID, version, and code signature are verified
+- Settings → About links to GitHub, the changelog, problem reports, and other apps
+- Menu bar menu order: Settings… → Updates → Getting Started → Quit
+
 ## 0.3.2 (2026-11-13)
 
 - Full-screen capture copies right away and adds to tabs without the editor (switch back in Settings, or capture all displays as one image)
