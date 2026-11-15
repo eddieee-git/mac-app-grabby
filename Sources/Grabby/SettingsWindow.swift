@@ -513,6 +513,7 @@ private struct SettingsView: View {
                 Link(L("GitHub 저장소"), destination: URL(string: "https://github.com/eddieee-git/mac-app-grabby")!)
             }
             .padding(.top, 6)
+            AppFamilyLinks(appName: "Grabby", english: settings.language == .english)
         }
         .padding(24)
         .frame(maxWidth: .infinity)

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/icon.png" width="96" alt="Grabby icon">
+  <img src="docs/images/icon.png" width="96" alt="Grabby icon">
 </p>
 
 <h1 align="center">Grabby</h1>
@@ -15,7 +15,7 @@
   <a href="README.md">한국어</a>
 </p>
 
-![A toolbar appears right where you select](docs/screenshots/capture.jpg)
+![A toolbar appears right where you select](docs/images/capture.jpg)
 
 ## Features
 
@@ -31,7 +31,7 @@ The app's interface is available in Korean and English (Settings → General →
 
 | Edit again in the tab window | Beautify |
 |---|---|
-| ![Tab window](docs/screenshots/library.jpg) | ![Beautify](docs/screenshots/beautify.png) |
+| ![Tab window](docs/images/library.jpg) | ![Beautify](docs/images/beautify.png) |
 
 ## Install
 
@@ -45,7 +45,7 @@ The app's interface is available in Korean and English (Settings → General →
 4. The Getting Started window appears on first launch. Turn on **Screen Recording** permission, then click **Restart After Turning On**.
    If you'd rather keep the macOS screenshot shortcuts, click **Use ⌃⌘ Keys** in Getting Started.
 
-**Updating**: From 0.3.1, if update checks are on in Settings, **Install Version…** appears at the top of the menu bar menu when a new version is out. Click it and Grabby downloads and verifies the new version, replaces itself and restarts (no "Not Opened" warning this way). From 0.3.2, Grabby also checks the developer's own signature on the file and won't install it if the signature doesn't match. If Screen Recording permission was reset by the update, Grabby tells you right away. On older versions, or to do it by hand, replace Grabby in Applications with the one from the new dmg. If Grabby asks for Screen Recording permission again, turn Grabby off and on in the Screen & System Audio Recording list, then restart it. Because Grabby has no developer signature, macOS sometimes treats a new version as a different app.
+**Updating**: Grabby checks for a new version once a day. When there is one, **Check for Updates…** in the menu bar menu becomes **Install Version X…**. Click it and Grabby downloads and verifies the new version, replaces itself and restarts (no "Not Opened" warning this way). It checks the developer's own signature on the file and won't install it if the signature doesn't match. Up to 0.3.2, automatic checks were off by default, so if you never turned them on, download the next version once by hand. If Screen Recording permission was reset by the update, Grabby tells you right away. On older versions, or to do it by hand, replace Grabby in Applications with the one from the new dmg. If Grabby asks for Screen Recording permission again, turn Grabby off and on in the Screen & System Audio Recording list, then restart it. Because Grabby has no developer signature, macOS sometimes treats a new version as a different app.
 
 > Requires an Apple silicon Mac with macOS 14 (Sonoma) or later.
 
@@ -132,7 +132,7 @@ Menu bar → Settings…
 
 | Tab | Items |
 |---|---|
-| General | Language (한국어/English), theme, launch at login, confirm before deleting tabs, captures to keep, delete old captures (1/7/30/90 days), capture sound, keep in tabs when closed with Esc, show the tab window after capturing, timer delay, bring back pinned captures, open QR links right away, new version alerts and install from the menu (off by default) |
+| General | Language (한국어/English), theme, launch at login, confirm before deleting tabs, captures to keep, delete old captures (1/7/30/90 days), capture sound, keep in tabs when closed with Esc, show the tab window after capturing, timer delay, bring back pinned captures, open QR links right away, check for new versions automatically (on by default) and install them automatically (off by default) |
 | Editing | Palette (add, remove, drag to reorder) and default color, default width, remember last style, capture toolbar (two rows/one row, center/right, hint), capture only the picked window, copy full-screen captures right away and capture all displays as one image, starting tools, beautify background and padding, whiteboard background |
 | Saving | Default save folder, format (PNG/JPEG), save without a dialog, text recognition for search, clear recognized text |
 | Shortcuts | Change global shortcuts, switch to ⌃⌘ keys at once; warnings for other capture apps and macOS screenshot shortcuts |
@@ -150,7 +150,7 @@ Turn Grabby on in System Settings → Privacy & Security → Screen & System Aud
 Captures in the tab window live in `~/Library/Application Support/Grabby/Captures` (Settings → About → Open Capture Folder). To save files elsewhere, use ⌘S or **Save All** in the tab window. When you exceed the number to keep, the oldest are removed first, but ★ kept captures are never removed. To keep sensitive screens such as passwords from lingering, turn on **Delete old captures** in Settings → General to remove captures after a number of days (off by default). Captures are stored unencrypted, only on this Mac.
 
 **Does Grabby send anything over the internet?**
-Not by default. Capture, text recognition (OCR), and QR reading happen entirely on your Mac, and no account is needed. Only if you turn on **Tell me about new versions** in Settings → General does Grabby ask GitHub for the latest version number, once a day. It downloads a new dmg from GitHub only when you click **Install Version…** in the menu.
+Only one request to GitHub's public API asking for the latest release, when checking for updates. Capture, text recognition (OCR), and QR reading happen entirely on your Mac and are never sent anywhere. No account is needed. Turn off automatic checks in Settings and not even that is sent.
 
 **I'm uneasy about QR links opening by themselves.**
 Grabby opens only web addresses (http, https); file addresses and addresses that open other apps are only copied. To stop opening links right away, turn off **Open QR code links in the browser right away** in Settings → General. If there are several QR codes, none are opened and all are copied.
@@ -182,9 +182,20 @@ Builds with Command Line Tools only, no Xcode.
 - Release dmgs come with an Ed25519 signature (`.sig`) that in-app updates check. The signing key lives outside the repo at `~/.config/grabby/update-signing.key`; create it once with `swift scripts/sign-update.swift keygen` (no Apple account needed).
 - If Screen Recording permission resets after every rebuild, create a local signing certificate once (no Apple account needed): `./scripts/make-signing-cert.sh`
 - The icon is drawn by `scripts/make-icon.swift`.
-- The testing arguments `-showInDock YES` (show in Dock), `-captureFolder <path>` (use another capture folder), `-updateFeed <url>` (check another update address) and `-autoInstallUpdate YES` (install a new version without asking) work only in debug builds: `GRABBY_DEBUG=1 ./scripts/build-app.sh`
+- The testing arguments `-showInDock YES` (show in Dock), `-captureFolder <path>` (use another capture folder) and `-debugUpdateURL <url>` (check another update address) work only in debug builds: `GRABBY_DEBUG=1 ./scripts/build-app.sh`
 - Developer notes (structure, conventions, testing and release steps) are in [CLAUDE.md](CLAUDE.md) (Korean).
 
 ## License
 
 [MIT](LICENSE)
+
+<!-- more-apps:start -->
+## More apps
+
+| | App | |
+|---|---|---|
+| <img src="https://raw.githubusercontent.com/eddieee-git/mac-app-clocky/main/docs/images/icon.png" width="32" alt=""> | [Clocky](https://github.com/eddieee-git/mac-app-clocky) | Flip-clock timers, alarms and calendar alerts from the menu bar |
+| <img src="https://raw.githubusercontent.com/eddieee-git/mac-app-floaty/main/docs/images/icon.png" width="32" alt=""> | [Floaty](https://github.com/eddieee-git/mac-app-floaty) | Floating sticky notes, right from the menu bar |
+| <img src="https://raw.githubusercontent.com/eddieee-git/mac-app-gitty/main/docs/images/icon.png" width="32" alt=""> | [Gitty](https://github.com/eddieee-git/mac-app-gitty) | Work with Git repositories like a file manager |
+| <img src="https://raw.githubusercontent.com/eddieee-git/mac-app-peeky/main/docs/images/icon.png" width="32" alt=""> | [Peeky](https://github.com/eddieee-git/mac-app-peeky) | Bring back menu bar icons hidden behind the notch |
+<!-- more-apps:end -->

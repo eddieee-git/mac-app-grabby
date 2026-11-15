@@ -1,3 +1,7 @@
+> 문서·UI 규칙은 ../mac-app/STYLE.md를 따른다. 다르게 할 때는 여기에 이유를 적는다.
+
+> 업데이트 코드(`AppUpdater.swift`)는 다섯 앱 공통이다. 여기서 고치지 않고 ../mac-app/shared/AppUpdater.swift를 고친 뒤 ../mac-app/scripts/sync-shared.sh로 복사한다. 이 앱에만 해당하는 값은 `UpdaterSetup.swift`에 있다. 시험할 때는 디버그 빌드에서 `-debugUpdateURL <주소>`, `-debugUpdatePublicKey <키>`, `-debugAppVersion <버전>`을 쓴다.
+
 # Grabby 개발 메모
 
 macOS 메뉴바 화면 캡처 앱. Swift Package 실행 파일 하나로, Xcode 없이 Command Line Tools만으로 빌드한다.
@@ -25,8 +29,7 @@ swift scripts/sign-update.swift public  # 업데이트 서명 키의 공개 키 
 디버그 빌드 전용 실행 인자:
 - `-showInDock YES`: 일반 앱처럼 Dock에 보임(화면 자동화 도구로 점검할 때 필요)
 - `-captureFolder <경로>`: 다른 보관함 사용
-- `-updateFeed <주소>`: 업데이트 확인 주소를 바꿈(`file://…json`도 됨)
-- `-autoInstallUpdate YES`: 새 버전을 찾으면 묻지 않고 설치
+- `-debugUpdateURL <주소>`: 업데이트 확인 주소를 바꿈. `-debugUpdatePublicKey <키>`로 시험용 서명 키를 믿게 함(공통 AppUpdater)
 
 ## 릴리스 순서
 
@@ -39,7 +42,7 @@ swift scripts/sign-update.swift public  # 업데이트 서명 키의 공개 키 
 앱 안의 업데이트는 GitHub 최신 릴리스의 첫 `.dmg` 첨부와, 같은 이름에 `.sig`를 붙인 Ed25519 서명 파일을 쓴다. 릴리스에는 dmg 하나와 그 `.sig`를 올리고, dmg 안 앱 이름은 `Grabby.app`, 버전은 태그와 같아야 한다.
 
 **업데이트 서명 키**
-- 비밀 키는 저장소 밖 `~/.config/grabby/update-signing.key`(`GRABBY_UPDATE_KEY`로 바꿀 수 있음)에 있다. 공개 키는 `Updater.publicKey`에 들어 있다.
+- 비밀 키는 저장소 밖 `~/.config/grabby/update-signing.key`(`GRABBY_UPDATE_KEY`로 바꿀 수 있음)에 있다. 공개 키는 `UpdaterSetup.swift`의 `appPublicKey`에 들어 있다.
 - `build-app.sh`가 키가 있으면 `build/Grabby-<버전>.dmg.sig`를 만들고, `release.sh`는 `.sig`가 없으면 멈춘다.
 - **키를 잃어버리면 이미 설치된 앱은 새 버전을 자동으로 받지 못한다.** 따로 백업해 둔다. 키를 바꾸면 그 전 버전 사용자는 dmg로 한 번 직접 업데이트해야 한다.
 - 0.3.1은 서명 대신 GitHub의 SHA-256만 확인하는 버전이라, 0.3.1 → 다음 버전도 메뉴에서 받을 수 있다.
@@ -59,7 +62,7 @@ swift scripts/sign-update.swift public  # 업데이트 서명 키의 공개 키 
 | `CodeReader.swift` | QR·바코드 읽기(Vision). 웹 주소(http/https)만 브라우저로 엶 |
 | `HotKey.swift` | Carbon 전역 단축키, `HotKeyAction`, 기본값(⇧⌘)과 ⌃⌘ 묶음 |
 | `SettingsWindow.swift` | `AppSettings`(UserDefaults)와 설정 창(SwiftUI) |
-| `UpdateChecker.swift` / `Updater.swift` | 최신 릴리스 확인 / 내려받아 확인(Ed25519 `.sig`·SHA-256·번들 ID·버전·코드 서명) 후 바꿔 넣고 다시 시작. 업데이트 뒤 화면 기록 권한이 풀렸으면 안내 |
+| `AppUpdater.swift`(공통) / `UpdaterSetup.swift` | 최신 릴리스 확인 / 내려받아 확인(Ed25519 `.sig`·SHA-256·번들 ID·버전·코드 서명) 후 바꿔 넣고 다시 시작. 업데이트 뒤 화면 기록 권한이 풀렸으면 안내 |
 | `Localization.swift` | `L()`과 영어 사전 |
 | `Toast.swift`, `Countdown.swift`, `Feedback.swift`, `WelcomeWindow.swift` | 알림, 타이머 숫자, 캡처 반짝임·소리, 시작 안내 |
 | `SelfTest.swift` | 자체 점검 묶음 |

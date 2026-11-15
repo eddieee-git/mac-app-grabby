@@ -161,13 +161,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(item(L("캡처 창 열기"), action: #selector(openLibrary)))
         menu.addItem(item(L("띄운 캡처 모두 닫기"), action: #selector(closeAllPins)))
         menu.addItem(.separator())
-        menu.addItem(item(L("시작 안내"), action: #selector(openWelcome)))
-        menu.addItem(.separator())
         let settingsItem = item(L("설정…"), action: #selector(openSettings))
         settingsItem.keyEquivalent = ","
         settingsItem.keyEquivalentModifierMask = .command
         menu.addItem(settingsItem)
         menu.addItem(AppUpdater.shared.makeMenuItem())
+        menu.addItem(item(L("시작 안내"), action: #selector(openWelcome)))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: L("Grabby 종료"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu

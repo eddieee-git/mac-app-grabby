@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/icon.png" width="96" alt="Grabby 아이콘">
+  <img src="docs/images/icon.png" width="96" alt="Grabby 아이콘">
 </p>
 
 <h1 align="center">Grabby</h1>
@@ -15,7 +15,7 @@
   <a href="README.en.md">English</a>
 </p>
 
-![영역을 고르면 그 자리에 도구 막대가 떠요](docs/screenshots/capture.jpg)
+![영역을 고르면 그 자리에 도구 막대가 떠요](docs/images/capture.jpg)
 
 ## 특징
 
@@ -29,7 +29,7 @@
 
 | 탭 창에서 다시 고치기 | 꾸며서 복사 |
 |---|---|
-| ![탭 창](docs/screenshots/library.jpg) | ![꾸며서 복사](docs/screenshots/beautify.png) |
+| ![탭 창](docs/images/library.jpg) | ![꾸며서 복사](docs/images/beautify.png) |
 
 ## 설치
 
@@ -43,7 +43,7 @@
 4. 처음 실행하면 시작 안내 창이 떠요. **화면 기록 권한**을 켜고 **켰으면 다시 시작**을 누르면 준비가 끝나요.
    macOS 스크린샷 단축키를 끄고 싶지 않으면 시작 안내의 **⌃⌘ 키로 바꾸기**를 누르세요.
 
-**업데이트할 때**: 0.3.1부터는 설정에서 업데이트 확인을 켜 두면, 새 버전이 나왔을 때 메뉴바 메뉴 맨 위에 "새 버전 설치…"가 생겨요. 누르면 내려받아 확인한 뒤 바꿔 넣고 다시 시작해요(이때는 "열 수 없음" 경고가 뜨지 않아요). 0.3.2부터는 개발자가 따로 서명한 파일인지 확인하고, 서명이 맞지 않으면 설치하지 않아요. 업데이트 뒤 화면 기록 권한이 풀렸으면 바로 안내가 떠요. 그 전 버전이거나 직접 바꾸려면 새 dmg의 Grabby를 응용 프로그램 폴더에 덮어쓰면 돼요. 그 뒤 화면 기록 권한을 다시 물으면, 시스템 설정의 화면 및 시스템 오디오 기록 목록에서 Grabby를 한 번 껐다 켜고 다시 시작해 주세요. 개발자 서명이 없는 앱이라 macOS가 새 버전을 다른 앱으로 볼 때가 있어요.
+**업데이트할 때**: Grabby는 하루에 한 번 새 버전을 확인하고, 있으면 메뉴바 메뉴의 **업데이트 확인…**이 **새 버전 X 설치…**로 바뀌어요. 누르면 내려받아 확인한 뒤 바꿔 넣고 다시 시작해요(이때는 "열 수 없음" 경고가 뜨지 않아요). 개발자가 따로 서명한 파일인지 확인하고, 서명이 맞지 않으면 설치하지 않아요. 0.3.2까지는 자동 확인이 기본으로 꺼져 있어서, 켜지 않았다면 한 번만 직접 받아 주세요. 업데이트 뒤 화면 기록 권한이 풀렸으면 바로 안내가 떠요. 그 전 버전이거나 직접 바꾸려면 새 dmg의 Grabby를 응용 프로그램 폴더에 덮어쓰면 돼요. 그 뒤 화면 기록 권한을 다시 물으면, 시스템 설정의 화면 및 시스템 오디오 기록 목록에서 Grabby를 한 번 껐다 켜고 다시 시작해 주세요. 개발자 서명이 없는 앱이라 macOS가 새 버전을 다른 앱으로 볼 때가 있어요.
 
 > Apple 실리콘 Mac, macOS 14(Sonoma) 이상에서 동작해요.
 
@@ -130,7 +130,7 @@
 
 | 탭 | 항목 |
 |---|---|
-| 일반 | 언어(한국어/English), 테마, 로그인 시 실행, 탭 삭제 확인, 보관할 캡처 수, 오래된 캡처 지우기(1·7·30·90일), 캡처 소리, Esc로 닫아도 탭에 남기기, 캡처하면 탭 창 띄우기, 타이머 캡처 시간, 띄운 캡처 되살리기, QR 링크 바로 열기, 새 버전 알림·메뉴에서 설치(기본 꺼짐) |
+| 일반 | 언어(한국어/English), 테마, 로그인 시 실행, 탭 삭제 확인, 보관할 캡처 수, 오래된 캡처 지우기(1·7·30·90일), 캡처 소리, Esc로 닫아도 탭에 남기기, 캡처하면 탭 창 띄우기, 타이머 캡처 시간, 띄운 캡처 되살리기, QR 링크 바로 열기, 새 버전 자동으로 확인(기본 켬)·자동으로 설치(기본 끔) |
 | 편집 | 팔레트(색 더하기·빼기·끌어서 순서 바꾸기)·기본 색, 기본 굵기, 마지막에 쓴 값 기억, 캡처 도구 막대(두 줄/한 줄, 가운데/오른쪽, 안내 문구), 고른 창만 캡처, 전체 화면 캡처는 바로 복사·여러 모니터를 한 장으로, 캡처·화이트보드 시작 도구, 꾸미기 배경·여백, 화이트보드 바탕 |
 | 저장 | 기본 저장 폴더, 형식(PNG/JPEG), 저장 창 없이 바로 저장, 글자 인식 검색 켜기·인식한 글자 지우기 |
 | 단축키 | 전역 단축키 바꾸기, ⌃⌘ 키로 한 번에 바꾸기, 다른 캡처 앱·macOS 스크린샷 단축키와 겹침 경고 |
@@ -148,7 +148,7 @@
 탭 창에 쌓인 캡처는 `~/Library/Application Support/Grabby/Captures`에 있어요(설정 → 정보 → 캡처 폴더 열기). 파일로 따로 저장하려면 ⌘S나 탭 창의 "모두 저장"을 쓰세요. 보관할 개수를 넘으면 오래된 것부터 정리되는데, ★ 고정한 캡처는 지우지 않아요. 비밀번호 같은 민감한 화면이 오래 남지 않게 하려면 설정 → 일반 → **오래된 캡처 지우기**로 며칠 지난 캡처를 자동으로 지울 수 있어요(기본은 지우지 않음). 캡처는 암호화하지 않고 이 Mac에만 저장해요.
 
 **인터넷에 무언가를 보내나요?**
-기본으로는 아무것도 보내지 않아요. 캡처, 글자 인식(OCR), QR 읽기는 모두 이 Mac 안에서만 처리하고 계정도 필요 없어요. 설정 → 일반에서 "새 버전이 나오면 알려 주기"를 켠 경우에만 하루 한 번 GitHub에 최신 버전 번호를 물어보고, 메뉴에서 "새 버전 설치…"를 누를 때만 GitHub에서 새 dmg를 내려받아요.
+업데이트 확인 때 GitHub 공개 API에 최신 릴리스를 묻는 요청 하나만 보내요. 캡처, 글자 인식(OCR), QR 읽기는 모두 이 Mac 안에서만 처리하고 어디에도 보내지 않아요. 계정도 필요 없어요. 설정에서 자동 확인을 끄면 그것도 보내지 않아요.
 
 **QR 링크가 저절로 열려서 불안해요.**
 웹 주소(http, https)만 열고, 파일이나 다른 앱을 여는 주소는 열지 않고 복사만 해요. 바로 열지 않게 하려면 설정 → 일반에서 "QR 코드가 링크면 바로 브라우저로 열기"를 끄세요. QR이 여러 개면 열지 않고 모두 복사해요.
@@ -180,9 +180,20 @@ Xcode 없이 Command Line Tools만으로 빌드해요.
 - 릴리스용 dmg에는 앱 안 업데이트가 확인하는 Ed25519 서명(`.sig`)이 함께 만들어져요. 서명 키는 저장소 밖 `~/.config/grabby/update-signing.key`에 두고, 처음 한 번 `swift scripts/sign-update.swift keygen`으로 만들어요(Apple 계정 불필요).
 - 다시 빌드할 때마다 화면 기록 권한이 풀리면, 이 Mac 전용 서명 인증서를 한 번 만들어 두세요(Apple 계정 불필요): `./scripts/make-signing-cert.sh`
 - 아이콘은 `scripts/make-icon.swift`로 그려요.
-- 점검용 실행 인자 `-showInDock YES`(Dock에 표시), `-captureFolder <경로>`(다른 보관함 사용), `-updateFeed <주소>`(업데이트 확인 주소 바꾸기), `-autoInstallUpdate YES`(새 버전을 묻지 않고 설치)는 디버그 빌드에서만 동작해요: `GRABBY_DEBUG=1 ./scripts/build-app.sh`
+- 점검용 실행 인자 `-showInDock YES`(Dock에 표시), `-captureFolder <경로>`(다른 보관함 사용), `-debugUpdateURL <주소>`(업데이트 확인 주소 바꾸기)는 디버그 빌드에서만 동작해요: `GRABBY_DEBUG=1 ./scripts/build-app.sh`
 - 개발 메모(구조, 규칙, 점검·릴리스 순서)는 [CLAUDE.md](CLAUDE.md)에 있어요.
 
 ## 라이선스
 
 [MIT](LICENSE)
+
+<!-- more-apps:start -->
+## 다른 앱
+
+| | 앱 | |
+|---|---|---|
+| <img src="https://raw.githubusercontent.com/eddieee-git/mac-app-clocky/main/docs/images/icon.png" width="32" alt=""> | [Clocky](https://github.com/eddieee-git/mac-app-clocky) | 메뉴바에서 꺼내 쓰는 넘김시계 타이머·알람·일정 알림 |
+| <img src="https://raw.githubusercontent.com/eddieee-git/mac-app-floaty/main/docs/images/icon.png" width="32" alt=""> | [Floaty](https://github.com/eddieee-git/mac-app-floaty) | 메뉴바에서 바로 꺼내 쓰는 플로팅 스티커 메모 |
+| <img src="https://raw.githubusercontent.com/eddieee-git/mac-app-gitty/main/docs/images/icon.png" width="32" alt=""> | [Gitty](https://github.com/eddieee-git/mac-app-gitty) | Git 저장소를 파일 관리자처럼 다루는 앱 |
+| <img src="https://raw.githubusercontent.com/eddieee-git/mac-app-peeky/main/docs/images/icon.png" width="32" alt=""> | [Peeky](https://github.com/eddieee-git/mac-app-peeky) | 노치에 가려진 메뉴바 아이콘을 꺼내 보는 앱 |
+<!-- more-apps:end -->
