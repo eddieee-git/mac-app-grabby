@@ -210,11 +210,12 @@ final class CaptureStore {
         save()
     }
 
-    /// 모든 캡처를 지운다. `keepKept`이면 ★ 고정한 캡처는 남긴다. 지운 개수를 돌려준다.
+    /// 모든 캡처를 지운다. `keepKept`이면 ★ 고정한 캡처는 남기고, `except`로 준 캡처도 남긴다. 지운 개수를 돌려준다.
     @discardableResult
-    func removeAll(keepKept: Bool) -> Int {
-        let doomed = items.filter { !(keepKept && $0.isKept) }
-        for item in doomed { delete(item, reason: keepKept ? "모두 닫기(고정 제외)" : "모두 닫기") }
+    func removeAll(keepKept: Bool, except: UUID? = nil) -> Int {
+        let doomed = items.filter { !(keepKept && $0.isKept) && $0.id != except }
+        let reason = except != nil ? "다른 탭 모두 닫기" : "모두 닫기"
+        for item in doomed { delete(item, reason: keepKept ? reason + "(고정 제외)" : reason) }
         items.removeAll { item in doomed.contains { $0.id == item.id } }
         save()
         return doomed.count

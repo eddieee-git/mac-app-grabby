@@ -2,6 +2,10 @@
 
 버전마다 자세한 내용은 [docs/releases](docs/releases)와 [GitHub 릴리스](https://github.com/eddieee-git/mac-app-grabby/releases)에 있어요. English: [CHANGELOG.en.md](CHANGELOG.en.md)
 
+## 다음 버전
+
+- 탭 오른쪽 클릭 메뉴(탭 닫기, 다른 탭 모두 닫기, 모두 닫기), ⌥를 누른 채 ×로 모두 닫기
+
 ## 0.3.3 (2026-11-15)
 
 - 새 버전 자동 확인을 기본으로 켬(직접 끈 사람은 그대로), 자동 설치는 따로(기본 끔)

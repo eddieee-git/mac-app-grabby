@@ -49,6 +49,7 @@ enum SelfTest {
             ("KeyTests.readsQRCode", SelfTest_KeyTests.test_readsQRCode),
             ("StoreTests.pruneKeepsNewestAndKept", SelfTest_StoreTests.test_pruneKeepsNewestAndKept),
             ("StoreTests.removeAllKeepsKeptWhenAsked", SelfTest_StoreTests.test_removeAllKeepsKeptWhenAsked),
+            ("StoreTests.removeAllExceptOne", SelfTest_StoreTests.test_removeAllExceptOne),
             ("StoreTests.editableKeepsOriginalAndMarks", SelfTest_StoreTests.test_editableKeepsOriginalAndMarks),
             ("StoreTests.reloadsFromDisk", SelfTest_StoreTests.test_reloadsFromDisk),
             ("StoreTests.oldIndexWithoutNewFieldsStillLoads", SelfTest_StoreTests.test_oldIndexWithoutNewFieldsStillLoads),
@@ -393,6 +394,18 @@ enum SelfTest_StoreTests {
         expect(store.items.count == 1)
         expect(store.removeAll(keepKept: false) == 1)
         expect(store.items.isEmpty)
+    }
+
+    static func test_removeAllExceptOne() {
+        let (store, dir) = tempStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        for _ in 0..<4 { store.add(image, scale: 1) }
+        let keep = store.items[2]
+        store.setKept(store.items[0], true)
+        expect(store.removeAll(keepKept: true, except: keep.id) == 2)
+        expect(Set(store.items.map(\.id)) == Set([keep.id, store.items.first { $0.isKept }!.id]))
+        expect(store.removeAll(keepKept: false, except: keep.id) == 1)
+        expect(store.items.map(\.id) == [keep.id])
     }
 
     static func test_editableKeepsOriginalAndMarks() throws {

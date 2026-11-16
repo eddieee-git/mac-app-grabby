@@ -12,6 +12,9 @@ final class CaptureTab: NSView, NSDraggingSource {
 
     var onSelect: (() -> Void)?
     var onClose: (() -> Void)?
+    /// ⌥를 누른 채 ×를 누르거나, 오른쪽 클릭 메뉴에서 고른다.
+    var onCloseAll: (() -> Void)?
+    var onCloseOthers: (() -> Void)?
     var onDoubleClick: (() -> Void)?
 
     var thumbnail: NSImage? {
@@ -49,7 +52,7 @@ final class CaptureTab: NSView, NSDraggingSource {
         closeButton.isBordered = false
         closeButton.imageScaling = .scaleProportionallyDown
         closeButton.contentTintColor = .secondaryLabelColor
-        closeButton.toolTip = L("삭제")
+        closeButton.toolTip = L("삭제 · ⌥를 누른 채 누르면 모두 닫기")
         closeButton.target = self
         closeButton.action = #selector(closeTapped)
 
@@ -97,7 +100,28 @@ final class CaptureTab: NSView, NSDraggingSource {
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-    @objc private func closeTapped() { onClose?() }
+    @objc private func closeTapped() {
+        if NSEvent.modifierFlags.contains(.option), let onCloseAll { onCloseAll() } else { onClose?() }
+    }
+
+    /// 오른쪽 클릭(또는 ⌃클릭) 메뉴: 이 탭 닫기, 다른 탭 모두 닫기, 모두 닫기.
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = NSMenu()
+        func add(_ title: String, _ symbol: String, _ action: Selector) {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = self
+            item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+            menu.addItem(item)
+        }
+        add(L("탭 닫기"), "xmark", #selector(closeFromMenu))
+        add(L("다른 탭 모두 닫기…"), "xmark.square", #selector(closeOthersFromMenu))
+        add(L("모두 닫기…"), "xmark.square.fill", #selector(closeAllFromMenu))
+        return menu
+    }
+
+    @objc private func closeFromMenu() { onClose?() }
+    @objc private func closeOthersFromMenu() { onCloseOthers?() }
+    @objc private func closeAllFromMenu() { onCloseAll?() }
 
     override func mouseDown(with event: NSEvent) {
         mouseDownPoint = event.locationInWindow

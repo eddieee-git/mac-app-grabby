@@ -124,7 +124,7 @@ You can also pick 3, 5, or 10 seconds from the menu bar. The remaining seconds a
 | ⌘+ / ⌘- / ⌘0 / ⌘9 | Zoom in / zoom out / actual size / fit to window |
 | ⌫ | Delete the selected mark, or the tab if none |
 
-The tab window also has crop, notes, ★ keep, search, Save All, and Close All.
+The tab window also has crop, notes, ★ keep, search, Save All, and Close All. Right-click a tab for **Close Other Tabs** and **Close All**, or ⌥-click a tab's × to close all (also in the menu behind the top-left grid icon).
 
 ## Settings
 

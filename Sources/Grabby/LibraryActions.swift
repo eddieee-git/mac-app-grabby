@@ -205,12 +205,17 @@ extension LibraryWindowController {
     }
 
     /// 모든 탭을 지운다. 지우기 전에 항상 묻고, ★ 고정한 캡처가 있으면 남길지 고르게 한다.
-    @objc func closeAllAction() {
+    @objc func closeAllAction() { closeAll(except: nil) }
+
+    /// 모두 닫기. `except`를 주면 그 탭만 남긴다(다른 탭 모두 닫기).
+    func closeAll(except: UUID?) {
         guard let window else { return }
-        let keptCount = store.items.filter(\.isKept).count
+        let others = store.items.filter { $0.id != except }
+        guard !others.isEmpty else { return }
+        let keptCount = others.filter(\.isKept).count
         let alert = NSAlert()
-        alert.messageText = L("모든 캡처를 닫을까요?")
-        alert.informativeText = L("탭 %ld개를 삭제해요. 삭제한 캡처는 되돌릴 수 없어요.", store.items.count)
+        alert.messageText = except == nil ? L("모든 캡처를 닫을까요?") : L("다른 탭을 모두 닫을까요?")
+        alert.informativeText = L("탭 %ld개를 삭제해요. 삭제한 캡처는 되돌릴 수 없어요.", others.count)
         if keptCount > 0 {
             alert.addButton(withTitle: L("★ 고정한 것은 남기기"))
             alert.addButton(withTitle: L("모두 삭제"))
@@ -227,15 +232,17 @@ extension LibraryWindowController {
             case .alertSecondButtonReturn where keptCount > 0: keepKept = false
             default: return
             }
-            self.shownID = nil
-            self.selectedID = nil
-            self.canvas.load(Self.blank, pixelScale: 1)
+            if except == nil || self.selectedID != except {
+                self.shownID = nil
+                self.selectedID = nil
+                self.canvas.load(Self.blank, pixelScale: 1)
+            }
             self.isPersisting = true
-            let removed = self.store.removeAll(keepKept: keepKept)
+            let removed = self.store.removeAll(keepKept: keepKept, except: except)
             self.isPersisting = false
             self.knownNewest = self.store.items.first?.id
             self.reloadTabs()
-            self.select(self.store.items.first?.id)
+            self.select(except ?? self.store.items.first?.id)
             Toast.show(L("탭 %ld개를 닫았어요", removed))
         }
     }

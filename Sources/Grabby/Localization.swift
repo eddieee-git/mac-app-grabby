@@ -140,6 +140,10 @@ enum Localization {
         "⌘, ⌃, ⌥ 중 하나와 함께 누르세요.": "Press together with ⌘, ⌃ or ⌥.",
         "%@에서 쓰는 단축키예요.": "Already used by %@.",
         // 새 기능
+        "삭제 · ⌥를 누른 채 누르면 모두 닫기": "Delete · ⌥-click to close all",
+        "탭 닫기": "Close Tab",
+        "다른 탭 모두 닫기…": "Close Other Tabs…",
+        "다른 탭을 모두 닫을까요?": "Close all other tabs?",
         "보관함 %@ · 캡처 %ld개": "Library %@ · %ld captures",
         "모니터가 여러 대면 모든 화면을 한 장으로": "With several displays, capture all of them as one image",
         "되돌리기": "Undo",

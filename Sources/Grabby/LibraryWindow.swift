@@ -288,6 +288,8 @@ final class LibraryWindowController: NSWindowController, NSWindowDelegate {
             let tab = CaptureTab(item: item, thumbnail: store.thumbnail(for: item), fileURL: store.url(for: item))
             tab.onSelect = { [weak self] in self?.select(item.id) }
             tab.onClose = { [weak self] in self?.delete(item.id) }
+            tab.onCloseAll = { [weak self] in self?.closeAllAction() }
+            tab.onCloseOthers = { [weak self] in self?.closeAll(except: item.id) }
             tab.onDoubleClick = { [weak self] in self?.copyCurrent() }
             return tab
         }
