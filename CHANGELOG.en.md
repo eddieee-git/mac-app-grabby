@@ -2,9 +2,10 @@
 
 Details for each version are in [docs/releases](docs/releases) and on [GitHub Releases](https://github.com/eddieee-git/mac-app-grabby/releases). 한국어: [CHANGELOG.md](CHANGELOG.md)
 
-## Next version
+## 0.3.4 (2026-11-19)
 
 - Tab right-click menu (close tab, close other tabs, close all), ⌥-click × to close all
+- Automatic installs on by default; **Check for Updates…** installs right away without asking
 
 ## 0.3.3 (2026-11-15)
 
