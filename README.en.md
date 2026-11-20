@@ -49,7 +49,7 @@ The app's interface is available in Korean and English (Settings → General →
 
 > Requires an Apple silicon Mac with macOS 14 (Sonoma) or later.
 
-Use the camera icon in the menu bar to capture, open the capture window, or open settings.
+Use the camera icon in the menu bar to capture, open the capture window, or open settings. While the capture or settings window is open, Grabby also appears in the Dock and its menus show at the top left of the screen. Close all its windows and it goes back to the menu bar only.
 
 ## How to use
 

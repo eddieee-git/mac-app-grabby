@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.appearance = settings.theme.appearance
         buildMainMenu()
+        AppPresence.shared.start()
         buildStatusItem()
         // 언어를 바꾸면 메뉴를 다시 만들고, 탭 창은 새 언어로 다시 연다.
         NotificationCenter.default.addObserver(forName: Localization.didChange, object: nil, queue: .main) { [weak self] _ in
@@ -178,20 +179,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return item
     }
 
-    /// 메뉴바 앱이라 메뉴가 보이지는 않지만, ⌘C·⌘V·⌘Z 같은 편집 단축키가 동작하려면 필요하다.
+    /// 왼쪽 위 메뉴 막대. 탭 창·설정 창이 앞에 있을 때 보인다(AppPresence가 일반 앱으로 바꿔서).
+    /// 창이 없을 때도 ⌘C·⌘V·⌘Z·⌘W 같은 단축키가 동작하려면 필요하다.
     private func buildMainMenu() {
         let main = NSMenu()
-        let appItem = NSMenuItem()
+
         let appMenu = NSMenu()
+        appMenu.addItem(NSMenuItem(title: L("Grabby에 관하여"), action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: ""))
+        appMenu.addItem(AppUpdater.shared.makeMenuItem())
+        appMenu.addItem(.separator())
         let settingsItem = NSMenuItem(title: L("설정…"), action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         appMenu.addItem(settingsItem)
         appMenu.addItem(.separator())
+        appMenu.addItem(NSMenuItem(title: L("Grabby 숨기기"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h"))
+        let hideOthers = NSMenuItem(title: L("기타 숨기기"), action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
+        hideOthers.keyEquivalentModifierMask = [.command, .option]
+        appMenu.addItem(hideOthers)
+        appMenu.addItem(NSMenuItem(title: L("모두 보기"), action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: ""))
+        appMenu.addItem(.separator())
         appMenu.addItem(NSMenuItem(title: L("Grabby 종료"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
-        appItem.submenu = appMenu
-        main.addItem(appItem)
+        addSubmenu(appMenu, to: main)
 
-        let editItem = NSMenuItem()
+        let file = NSMenu(title: L("파일"))
+        let captureItem = NSMenuItem(title: L("캡처 창 열기"), action: #selector(openLibrary), keyEquivalent: "")
+        captureItem.target = self
+        file.addItem(captureItem)
+        file.addItem(.separator())
+        file.addItem(NSMenuItem(title: L("저장…"), action: #selector(NSDocument.save(_:)), keyEquivalent: "s"))
+        file.addItem(NSMenuItem(title: L("창 닫기"), action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"))
+        addSubmenu(file, to: main)
+
         let edit = NSMenu(title: L("편집"))
         edit.addItem(NSMenuItem(title: L("실행 취소"), action: Selector(("undo:")), keyEquivalent: "z"))
         edit.addItem(NSMenuItem(title: L("다시 실행"), action: Selector(("redo:")), keyEquivalent: "Z"))
@@ -200,11 +218,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         edit.addItem(NSMenuItem(title: L("복사"), action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
         edit.addItem(NSMenuItem(title: L("붙이기"), action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
         edit.addItem(NSMenuItem(title: L("전체 선택"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
-        edit.addItem(NSMenuItem(title: L("창 닫기"), action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"))
-        edit.addItem(NSMenuItem(title: L("저장…"), action: #selector(NSDocument.save(_:)), keyEquivalent: "s"))
-        editItem.submenu = edit
-        main.addItem(editItem)
+        addSubmenu(edit, to: main)
+
+        let window = NSMenu(title: L("윈도우"))
+        window.addItem(NSMenuItem(title: L("최소화"), action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m"))
+        window.addItem(NSMenuItem(title: L("확대/축소"), action: #selector(NSWindow.performZoom(_:)), keyEquivalent: ""))
+        window.addItem(.separator())
+        window.addItem(NSMenuItem(title: L("모두 앞으로 가져오기"), action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: ""))
+        addSubmenu(window, to: main)
+        NSApp.windowsMenu = window
+
         NSApp.mainMenu = main
+    }
+
+    private func addSubmenu(_ menu: NSMenu, to main: NSMenu) {
+        let item = NSMenuItem(title: menu.title, action: nil, keyEquivalent: "")
+        item.submenu = menu
+        main.addItem(item)
     }
 
     @objc private func openSettings() { settingsWindow.show() }

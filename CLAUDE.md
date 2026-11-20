@@ -52,7 +52,7 @@ swift scripts/sign-update.swift public  # 업데이트 서명 키의 공개 키 
 | 파일 | 하는 일 |
 |---|---|
 | `main.swift` | 시작점. `--self-test`면 점검만 돌리고 끝냄 |
-| `AppDelegate.swift` | 메뉴바 메뉴, 단축키 동작, 캡처 끝난 뒤 처리(`finishCapture`: 복사/저장/띄우기/OCR/QR/꾸미기/탭에만 남기기), 타이머, 업데이트 메뉴 |
+| `AppDelegate.swift` | 메뉴바 메뉴, 왼쪽 위 메뉴 막대, 단축키 동작, 캡처 끝난 뒤 처리(`finishCapture`: 복사/저장/띄우기/OCR/QR/꾸미기/탭에만 남기기), 타이머, 업데이트 메뉴 |
 | `CaptureOverlay.swift` | 캡처 화면(`CaptureSession`, `OverlayWindow`, `OverlayView`). 영역·창 고르기, 도구 막대, 키 처리, Esc 처리 |
 | `AnnotationCanvas.swift` / `EditToolbar.swift` | 그리기 도구와 표시, 도구 막대 |
 | `ScreenCapturer.swift` | ScreenCaptureKit 캡처와 화면 기록 권한 안내 |
@@ -63,6 +63,7 @@ swift scripts/sign-update.swift public  # 업데이트 서명 키의 공개 키 
 | `HotKey.swift` | Carbon 전역 단축키, `HotKeyAction`, 기본값(⇧⌘)과 ⌃⌘ 묶음 |
 | `SettingsWindow.swift` | `AppSettings`(UserDefaults)와 설정 창(SwiftUI) |
 | `AppUpdater.swift`(공통) / `UpdaterSetup.swift` | 최신 릴리스 확인 / 내려받아 확인(Ed25519 `.sig`·SHA-256·번들 ID·버전·코드 서명) 후 바꿔 넣고 다시 시작. 업데이트 뒤 화면 기록 권한이 풀렸으면 안내 |
+| `AppPresence.swift` | 제목 있는 창(탭 창·설정 창)이 열려 있는 동안만 일반 앱으로 바꿔 왼쪽 위 메뉴·Dock 아이콘을 보임. 다 닫히면 메뉴바 앱으로. NSPanel은 세지 않음 |
 | `Localization.swift` | `L()`과 영어 사전 |
 | `Toast.swift`, `Countdown.swift`, `Feedback.swift`, `WelcomeWindow.swift` | 알림, 타이머 숫자, 캡처 반짝임·소리, 시작 안내 |
 | `SelfTest.swift` | 자체 점검 묶음 |

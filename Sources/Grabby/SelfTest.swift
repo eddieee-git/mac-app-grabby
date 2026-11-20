@@ -50,6 +50,7 @@ enum SelfTest {
             ("StoreTests.pruneKeepsNewestAndKept", SelfTest_StoreTests.test_pruneKeepsNewestAndKept),
             ("StoreTests.removeAllKeepsKeptWhenAsked", SelfTest_StoreTests.test_removeAllKeepsKeptWhenAsked),
             ("StoreTests.removeAllExceptOne", SelfTest_StoreTests.test_removeAllExceptOne),
+            ("AppPresence.onlyTitledWindowsShowMenu", SelfTest.test_appPresenceCounts),
             ("StoreTests.editableKeepsOriginalAndMarks", SelfTest_StoreTests.test_editableKeepsOriginalAndMarks),
             ("StoreTests.reloadsFromDisk", SelfTest_StoreTests.test_reloadsFromDisk),
             ("StoreTests.oldIndexWithoutNewFieldsStillLoads", SelfTest_StoreTests.test_oldIndexWithoutNewFieldsStillLoads),
@@ -446,5 +447,20 @@ enum SelfTest_StoreTests {
         expect(item.matches("not found"))
         expect(item.matches(""))
         expect(!item.matches("회의"))
+    }
+}
+
+// 탭 창·설정 창만 Grabby 메뉴 막대를 띄우고, 캡처 화면·띄운 캡처 같은 패널은 그러지 않는지.
+extension SelfTest {
+    @MainActor static func test_appPresenceCounts() {
+        let rect = NSRect(x: 0, y: 0, width: 100, height: 100)
+        let titled = NSWindow(contentRect: rect, styleMask: [.titled, .closable], backing: .buffered, defer: true)
+        let borderless = NSWindow(contentRect: rect, styleMask: [.borderless], backing: .buffered, defer: true)
+        let panel = NSPanel(contentRect: rect, styleMask: [.titled, .nonactivatingPanel], backing: .buffered, defer: true)
+        for w in [titled, borderless, panel] { w.isReleasedWhenClosed = false }
+        expect(AppPresence.counts(titled), "제목 있는 창은 메뉴 막대를 띄움")
+        expect(!AppPresence.counts(borderless), "테두리 없는 창은 세지 않음")
+        expect(!AppPresence.counts(panel), "패널은 세지 않음")
+        expect(!AppPresence.isOpen(titled), "띄우지 않은 창은 열린 것이 아님")
     }
 }
