@@ -2,7 +2,7 @@
 
 버전마다 자세한 내용은 [docs/releases](docs/releases)와 [GitHub 릴리스](https://github.com/eddieee-git/mac-app-grabby/releases)에 있어요. English: [CHANGELOG.en.md](CHANGELOG.en.md)
 
-## 다음 버전
+## 0.3.5 (2026-11-20)
 
 - 탭 창·설정 창이 열려 있는 동안 왼쪽 위에 Grabby 메뉴(파일·편집·윈도우)와 Dock 아이콘이 보이고, 창을 모두 닫으면 다시 메뉴바에만 남음
 

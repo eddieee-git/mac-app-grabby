@@ -2,7 +2,7 @@
 
 Details for each version are in [docs/releases](docs/releases) and on [GitHub Releases](https://github.com/eddieee-git/mac-app-grabby/releases). 한국어: [CHANGELOG.md](CHANGELOG.md)
 
-## Next version
+## 0.3.5 (2026-11-20)
 
 - While the capture or settings window is open, the Grabby menus (File, Edit, Window) show at the top left and Grabby appears in the Dock; closing all windows returns it to the menu bar only
 
